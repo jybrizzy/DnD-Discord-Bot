@@ -1,0 +1,6 @@
+.vscode/
+venv/
+config.json
+class_icons/
+under_construction/
+cogs/__pycache__/
