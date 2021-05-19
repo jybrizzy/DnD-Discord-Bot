@@ -5,8 +5,9 @@ import pandas as pd
 
 pd.set_option("display.max_columns", None)
 
-JSON_FILE = "C:\\Users\\jbrizzy\\Desktop\\DnD_DB\\spells.json"
 DB_FILE = "C:\\Users\\jbrizzy\\Desktop\\DnD_DB\\dnd.db"
+JSON_FILE = "C:\\Users\\jbrizzy\\Desktop\\DnD_DB\\spells.json"
+
 
 with open(JSON_FILE) as spell_file:
     spell_json = json.loads(spell_file.read())
