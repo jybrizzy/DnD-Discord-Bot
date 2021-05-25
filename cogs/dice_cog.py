@@ -1,26 +1,66 @@
 import discord
 from discord.ext import commands
+import itertools
 import re
 from random import randint
 
 
 class RollParser:
-    def __init__(self, roll_string):
-        self.roll_str = roll_string
-        self.roll_dict = {}
-        self.max_sides = 1000
-        self.max_rolls = 10
-        self.max_dice = 100
 
-    def die_roller(self, num_of_dice=1, type_of_die=20):
+    max_dice = 100
+    max_sides = 1000
+    max_multiplier = 10
+    max_rolls = 10
+
+    def __init__(self, roll_string, roll=None):
+        self.roll_str = roll_string
+        if roll is None:
+            self.roll = {}
+        else:
+            self.roll = roll
+
+    def die_roller(self, num_of_dice, type_of_die):
         return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
+    @property
     def delineater(self):
 
+        # Check for & parse parentheses and multiplier
+        paren_check = re.findall(
+            r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
+        )
+        paren_check = list(itertools.chain(*paren_check))
+        self.roll_str = paren_check[1]
+        if not self.roll_str:
+            raise ValueError("No dice string to parse!")
+        elif paren_check[0] and paren_check[-1]:
+            raise ValueError("You cannot have more than 1 multiplier")
+
         # Find Base Roll
-        main_die_list = re.findall(r"[^+|^-]\b(\d*[d]\d+)\b", self.roll_str)
-        paired_die = [tuple(i.split("d", 1)) for i in main_die_list if i]
-        raw_rolls = [self.die_roller(dice, sides) for dice, sides in paired_die]
+        main_die_list = re.findall(
+            r"[^+|^-]\b(\d*[d]\d+)\b", self.roll_str
+        )  # [a-c]{1, 100} <--this will allow any characters a through c to have a length of 1 to 100, so like "ccccccc" would be valid
+        if len(main_die_list) > self.max_rolls:
+            raise ValueError("List is too long")
+        raw_die_numbers = [
+            tuple(die.split("d", 1)) for die in main_die_list
+        ]  # ->[('',6),]
+        main_die_tuples = []
+        for dice, sides in raw_die_numbers:
+            if (not dice) or (not sides):
+                dice = 1
+                sides = 20
+            elif (dice >= self.max_dice) or (sides >= self.max_sides):
+                dice = self.max_dice
+                sides = self.max_sides
+            else:
+                dice, sides = int(dice), int(sides)
+
+            main_die_tuples.append((dice, sides))
+        self.roll["main_roll"] = main_die_tuples
+
+        # turn to integers
+        # raw_rolls = [self.die_roller(dice, sides) for dice, sides in paired_die]
         # pretotals = [sum(x) for x in rolls_raw]
 
         # Find Modifiers
@@ -35,15 +75,22 @@ class RollParser:
                 sign = 1 if sign == "+" else -1 if sign == "-" else None
 
                 if mod_tuple[1]:
-                    mod_dice = [int(dice) for dice in re.findall(r"\d+", mod_tuple[1])]
-                    modifier = self.die_roller(mod_dice, int(mod_tuple[2]))
+
+                    mod_dice = [
+                        int(dice) if dice else 1
+                        for dice in re.findall(r"\d+", mod_tuple[1])
+                    ]
+                    try:
+                        modifier = self.die_roller(mod_dice, int(mod_tuple[2]))
+                    except:
+                        raise ValueError("Must assign # of sides to mod die")
 
                 else:
                     try:
                         modifier = sign * int(mod_tuple[2])
                     except ValueError as verr:
                         print(
-                            f"mod_tuple was unable to convert it's contents to a tuple: {verr}"
+                            f"modifer was unable to parse modification string: {verr}"
                         )
 
             modifier_list.append(modifier)
@@ -53,11 +100,18 @@ class RollParser:
         adv_list = ["advantage", "adv", "ad", "a"]
         dis_list = ["disadvantage", "disadv", "disv", "dis", "da"]
 
-        self.roll_dict["advantage"] = any(a in self.roll_str for a in adv_list)
-        self.roll_dict["disadvantage"] = any(d in self.roll_str for d in dis_list)
+        self.roll["advantage"] = any(a in self.roll_str for a in adv_list)
+        self.roll["disadvantage"] = any(d in self.roll_str for d in dis_list)
 
-        if self.roll_dict["advantage"] and self.roll_dict["disadvantage"]:
+        if self.roll["advantage"] and self.roll_dict["disadvantage"]:
             raise ValueError(
                 "You cannot have advantage and disadvantage in the same roll"
             )
+
+        self.roll["main_roll"] = self.roll.get("main_roll", [(1, 20)])
+        self.roll["modifier"] = self.roll.get("modifier", [0])
+        self.roll["advantage"] = self.roll.get("advantage", False)
+        self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
+
+        return self.roll
