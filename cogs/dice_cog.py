@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord.ext import commands
 import itertools
@@ -18,9 +19,6 @@ class RollParser:
             self.roll = {}
         else:
             self.roll = roll
-
-    def die_roller(self, num_of_dice, type_of_die):
-        return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
     @property
     def delineater(self):
@@ -81,7 +79,7 @@ class RollParser:
                         for dice in re.findall(r"\d+", mod_tuple[1])
                     ]
                     try:
-                        modifier = self.die_roller(mod_dice, int(mod_tuple[2]))
+                        modifier = RollCalculator.die_roller(mod_dice, int(mod_tuple[2]))
                     except:
                         raise ValueError("Must assign # of sides to mod die")
 
@@ -115,3 +113,60 @@ class RollParser:
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
+
+
+class RollCalculator:
+    def __init__(self, roll_results=None):
+        self.roll_string = roll_string
+        if roll_results is None:
+            self.roll_results = dict()
+        else:
+            self.roll_results = roll_results
+        self.roll = None
+
+    @staticmethod
+    def die_roller(num_of_dice, type_of_die):
+        return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
+
+    
+    def get_roll_values(self):
+    @classmethod
+    def from_string(cls, emp_str):
+        first, last, pay = emp_str.split('-')
+        return cls(first, last, pay)
+        
+
+class DiceCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command(name="roll", aliases=("r"))
+    async def roll_cmd(self, ctx, *, die_string=None):
+
+        roll_results = RollCalculator.die_results()
+
+        roller = ctx.message.author.name
+        msg = await ctx.send(string_value)
+
+        await msg.add_reaction(":repeat:")
+
+        while True:
+            try:
+                CHECK = (
+                    lambda reaction, user: user == ctx.author
+                    and str(reaction.emoji) == ":repeat:"
+                )
+                reaction, user = await self.bot.wait_for(
+                    "reaction", check=CHECK, timeout=60.0
+                )
+
+            except asyncio.TimeoutError:
+                await msg.clear_reactions()
+
+            else:
+                if reaction == ":repeat":
+                    await self.roll_cmd()
+
+
+def setup(bot):
+    bot.add_cog(DiceCog(bot))
