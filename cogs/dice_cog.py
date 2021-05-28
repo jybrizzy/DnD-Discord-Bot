@@ -23,21 +23,34 @@ class RollParser:
     @property
     def delineater(self):
 
+        self.roll_str = self.roll_str.lower().strip()
+            
         # Check for & parse parentheses and multiplier
         paren_check = re.findall(
             r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
-        )
-        paren_check = list(itertools.chain(*paren_check))
-        self.roll_str = paren_check[1]
-        if not self.roll_str:
+        ) 
+        paren_check = list(itertools.chain(*paren_check)) #Removes tuple inside list
+        if not paren_check[1]:
             raise ValueError("No dice string to parse!")
         elif paren_check[0] and paren_check[-1]:
             raise ValueError("You cannot have more than 1 multiplier")
+        elif paren_check[0] or paren_check[-1]:
+            multiplier_list = paren_check[::2]
+            multiplier = int(list(filter(None, multiplier_list))[0])
+            if multiplier == 0 or  not multiplier:
+                raise ValueError('Cannot have *0')
+            else:
+                self.roll["multiplier"] = multiplier
+            self.roll_str = paren_check[1]
+        else:
+            self.roll_str = paren_check[1]
+
+        
 
         # Find Base Roll
         main_die_list = re.findall(
             r"[^+|^-]\b(\d*[d]\d+)\b", self.roll_str
-        )  # [a-c]{1, 100} <--this will allow any characters a through c to have a length of 1 to 100, so like "ccccccc" would be valid
+        )  
         if len(main_die_list) > self.max_rolls:
             raise ValueError("List is too long")
         raw_die_numbers = [
@@ -46,10 +59,14 @@ class RollParser:
         main_die_tuples = []
         for dice, sides in raw_die_numbers:
             if (not dice) or (not sides):
-                dice = 1
-                sides = 20
-            elif (dice >= self.max_dice) or (sides >= self.max_sides):
+                dice, sides = 1, 20
+            elif (dice >= self.max_dice) and (sides >= self.max_sides):
                 dice = self.max_dice
+                sides = self.max_sides
+                raise ValueError('Too many rolls/sides')
+            elif (dice >= self.max_dice):
+                dice = self.max_dice
+            elif (sides >= self.max_sides):
                 sides = self.max_sides
             else:
                 dice, sides = int(dice), int(sides)
@@ -79,7 +96,9 @@ class RollParser:
                         for dice in re.findall(r"\d+", mod_tuple[1])
                     ]
                     try:
-                        modifier = RollCalculator.die_roller(mod_dice, int(mod_tuple[2]))
+                        modifier = RollCalculator().die_roller(
+                            mod_dice, int(mod_tuple[2])
+                        )
                     except:
                         raise ValueError("Must assign # of sides to mod die")
 
@@ -94,12 +113,11 @@ class RollParser:
             modifier_list.append(modifier)
 
         # Advantage or Disadvantage on Rolls
-
-        adv_list = ["advantage", "adv", "ad", "a"]
-        dis_list = ["disadvantage", "disadv", "disv", "dis", "da"]
-
-        self.roll["advantage"] = any(a in self.roll_str for a in adv_list)
-        self.roll["disadvantage"] = any(d in self.roll_str for d in dis_list)
+        advantage = re.findall('\s*(?<!dis)(advantage|advan|ad|a)\s*', self.roll_str, flags=re.IGNORECASE)
+        disadvantage = re.findall('\s*(disadvantage|disadv|disv|dis|da)\s*', self.roll_str, flags=re.IGNORECASE)
+        
+        self.roll["advantage"] = any(advantage)
+        self.roll['disadvantage'] = any(disadvantage)
 
         if self.roll["advantage"] and self.roll_dict["disadvantage"]:
             raise ValueError(
@@ -110,6 +128,7 @@ class RollParser:
         self.roll["modifier"] = self.roll.get("modifier", [0])
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
+        self.roll["multiplier"] = self.roll.get("multiplier", 1)
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
@@ -122,19 +141,38 @@ class RollCalculator:
             self.roll_results = dict()
         else:
             self.roll_results = roll_results
-        self.roll = None
-
-    @staticmethod
-    def die_roller(num_of_dice, type_of_die):
-        return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
+        self.roll_data = None
 
     
-    def get_roll_values(self):
-    @classmethod
-    def from_string(cls, emp_str):
-        first, last, pay = emp_str.split('-')
-        return cls(first, last, pay)
-        
+    def die_roller(self, num_of_dice, type_of_die):
+        return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
+
+    def advantage(self,):
+        [max(*rolls) for rolls in zip(roll1, roll2)]
+    
+    def disadvantage(self):
+        [min(*rolls) for rolls in zip(roll1, roll2)]
+
+    @property
+    def get_roll_values(self, roll_string):
+        self.roll_data = RollParser(roll_string).delineater
+        return self.roll_data
+
+    def calculate_results(self):
+
+        if not self.roll_data:
+            raise ValueError("Something went wrong in the parsing")
+        else:
+            if self.roll_data['advantage'] != 1:
+
+            if self.roll_data['advantage'] or self.roll_data['disadvantage']:
+                for dice, sides in self.roll_data['main roll']:
+                
+            for key, datum in self.self_roll_data.items():
+                if key == 'main_roll':
+                    for dice, sides in datum:
+                        outcome = self.die_roller(dice,sides)
+
 
 class DiceCog(commands.Cog):
     def __init__(self, bot):
