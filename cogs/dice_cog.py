@@ -37,7 +37,9 @@ class RollParser:
         elif paren_check[0] or paren_check[-1]:
             multiplier_list = paren_check[::2]
             multiplier = int(list(filter(None, multiplier_list))[0])
-            if multiplier == 0 or  not multiplier:
+            if yonot multiplier:
+                raise ValueError('Invalid multiplier formatting')
+            elif multiplier == 0:
                 raise ValueError('Cannot have *0')
             else:
                 self.roll["multiplier"] = multiplier
@@ -58,8 +60,10 @@ class RollParser:
         ]  # ->[('',6),]
         main_die_tuples = []
         for dice, sides in raw_die_numbers:
-            if (not dice) or (not sides):
-                dice, sides = 1, 20
+            if not dice:
+                dice = 1
+            elif not sides:
+                sides = 20
             elif (dice >= self.max_dice) and (sides >= self.max_sides):
                 dice = self.max_dice
                 sides = self.max_sides
@@ -123,6 +127,9 @@ class RollParser:
             raise ValueError(
                 "You cannot have advantage and disadvantage in the same roll"
             )
+
+        elif len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
+            raise ValueError("You cannot have more advantage/disadvantages than you have rolls")
 
         self.roll["main_roll"] = self.roll.get("main_roll", [(1, 20)])
         self.roll["modifier"] = self.roll.get("modifier", [0])

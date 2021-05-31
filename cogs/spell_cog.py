@@ -175,7 +175,7 @@ class SpellCog(commands.Cog):
         embeds = list(spell_book_embed.values())
         await paginator.run(embeds)
 
-    @commands.command(name="spells", aliases=("spells_of", "class spells"))
+    @commands.command(name="spells", aliases=("spells_of", "class_spells"))
     async def class_spells(self, ctx, _class: str):
         if _class.lower().strip() not in (
             "bard",
@@ -235,11 +235,11 @@ class SpellCog(commands.Cog):
                 inline=True,
             )
         for lvl in range(np.min(cls_lvls), np.max(cls_lvls) + 1):
-            ordinal = lambda n: f'{n}{"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4]}'
-            lvl = ordinal(lvl)
+            # ordinal = lambda n: f'{n}{"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4]}'
+            # lvl = ordinal(str(lvl))
             cls_spell.add_field(
                 name=f"Spell Level {lvl}",
-                value=self.spell_by_lvl(lvl_dict[lvl]),
+                value=self.spell_by_lvl(lvl_dict[str(lvl)]),
                 inline=True,
             )
 
