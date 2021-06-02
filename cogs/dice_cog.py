@@ -142,23 +142,27 @@ class RollParser:
 
 
 class RollCalculator:
-    def __init__(self, roll_results=None):
-        self.roll_string = roll_string
+    def __init__(self, roll_string, roll_results=None):
+        self.roll_string = roll_string.strip()
         if roll_results is None:
             self.roll_results = dict()
         else:
             self.roll_results = roll_results
         self.roll_data = None
+        self.dice = None
+        self.sides = None
 
     
     def die_roller(self, num_of_dice, type_of_die):
         return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
-    def advantage(self,):
-        [max(*rolls) for rolls in zip(roll1, roll2)]
+    def advantage(self, num_of_dice, type_of_die):
+        roll1, roll2 = self.die_roller(num_of_dice, type_of_die), self.die_roller(num_of_dice, type_of_die)
+        return [(max(*rolls), min(*rolls)) for rolls in zip(roll1, roll2)]
     
-    def disadvantage(self):
-        [min(*rolls) for rolls in zip(roll1, roll2)]
+    def disadvantage(self, num_of_dice, type_of_die):
+        roll1, roll2 = self.die_roller(num_of_dice, type_of_die), self.die_roller(num_of_dice, type_of_die)
+        return [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
 
     @property
     def get_roll_values(self, roll_string):
@@ -166,20 +170,40 @@ class RollCalculator:
         return self.roll_data
 
     def calculate_results(self):
+        res_list, rej_list = [], []
 
-        if not self.roll_data:
-            raise ValueError("Something went wrong in the parsing")
-        else:
-            if self.roll_data['advantage'] != 1:
+        for multiplier in self.roll_data["multiplier"]:
+            for dice, sides in self.roll_data['main roll']:
+                if self.roll_data['advantage']:
+                    adv_list = self.advantage(dice, sides)
+                    res_tup, rej_tup = zip(*adv_list)
+                elif self.roll_data['disadvantage']:
+                    dis_list = self.disadvantage(dice, sides)
+                    res_tup, rej_tup = zip(*dis_list)
+                else:
+                    res_tup = tuple(self.die_roller(dice, sides))
+                    rej_list = ()
 
-            if self.roll_data['advantage'] or self.roll_data['disadvantage']:
-                for dice, sides in self.roll_data['main roll']:
+                res_list.append(res_tup)
+                rej_list.append(rej_tup)
                 
-            for key, datum in self.self_roll_data.items():
-                if key == 'main_roll':
-                    for dice, sides in datum:
-                        outcome = self.die_roller(dice,sides)
+        mods = sum(self.roll_data['modifier'])
 
+        self.roll_results['Results'] = res_list
+        self.roll_results['Rejects'] = rej_list
+        self.roll_results['Pretotals'] = list(map(sum,res_list))
+        self.roll_results['Totals'] = [pretotal + mods for pretotal in self.roll_results['Pretotal']
+
+    def string_constructor(self):
+        if self.roll_data["multiplier"] == 1:
+             list(itertools.chain(*self.roll_results['Results'])
+            stringified_result = ', '.join(str(res) for res in))
+            crits_n_fails = re.compile(r"\b(20|1)\b")
+            stringified_result crits_n_fails.sub(r"**\1**", stringified_result))
+            line1 = f"{ctx.author.mention} :d20:\n" \
+                  f"{self.roll_string}: [{}"
+
+                    f"**Total**: {res.total}"
 
 class DiceCog(commands.Cog):
     def __init__(self, bot):
