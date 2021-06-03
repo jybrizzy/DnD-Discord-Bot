@@ -37,7 +37,7 @@ class RollParser:
         elif paren_check[0] or paren_check[-1]:
             multiplier_list = paren_check[::2]
             multiplier = int(list(filter(None, multiplier_list))[0])
-            if yonot multiplier:
+            if not multiplier:
                 raise ValueError('Invalid multiplier formatting')
             elif multiplier == 0:
                 raise ValueError('Cannot have *0')
@@ -173,7 +173,7 @@ class RollCalculator:
         res_list, rej_list = [], []
 
         for multiplier in self.roll_data["multiplier"]:
-            for dice, sides in self.roll_data['main roll']:
+            for dice, sides in self.roll_data['main_roll']:
                 if self.roll_data['advantage']:
                     adv_list = self.advantage(dice, sides)
                     res_tup, rej_tup = zip(*adv_list)
@@ -192,20 +192,59 @@ class RollCalculator:
         self.roll_results['Results'] = res_list
         self.roll_results['Rejects'] = rej_list
         self.roll_results['Pretotals'] = list(map(sum,res_list))
-        self.roll_results['Totals'] = [pretotal + mods for pretotal in self.roll_results['Pretotal']
+        self.roll_results['Totals'] = [pretotal + mods for pretotal in self.roll_results['Pretotal']]
 
     def string_constructor(self):
         if self.roll_data["multiplier"] == 1:
-             list(itertools.chain(*self.roll_results['Results'])
-            stringified_result = ', '.join(str(res) for res in))
-            crits_n_fails = re.compile(r"\b(20|1)\b")
-            stringified_result crits_n_fails.sub(r"**\1**", stringified_result))
-            line1 = f"{ctx.author.mention} :d20:\n" \
-                  f"{self.roll_string}: [{}"
+            dice_rolls = list(itertools.chain(*self.roll_results['Results']))
+            stringified_rolls = ', '.join(str(roll) for roll in dice_rolls)
+            stringified_rejects = ', '.join(str(roll) for roll in self.roll_results['Rejects'] if not None)
+            if any([roll for roll in self.roll_data['main_roll'] if roll[1] == 20]):
+                if 1 in dice_rolls:
+                    crit_fail = True
+                else:
+                    crit_fail = False
+                if 20 in dice_rolls:
+                    crit_sucess = True
+                else:
+                    crit_sucess = False
 
-                    f"**Total**: {res.total}"
+                crits_n_fails = re.compile(r"\b(20|1)\b")
+                stringified_rolls = crits_n_fails.sub(r"**\1**", stringified_rolls)
+            else:
+                pass
+            
+            pretotal = self.roll_results['Pretotals']
+            total = self.roll_results['Totals']
+            #custom emoji
+            posted_text = f"{ctx.author.mention} :d20:\n" \ 
+                          "{self.roll_string}: [{stringified_rolls}]\n" \
+                          "**Pretotal**: {pretotal}\n" \
+                          "**Total**: {total}\n"
 
-class DiceCog(commands.Cog):
+            if self.roll_data['advantage']:
+                posted_text += f"Rolled with Advantage\n" \
+                               f"_Rejected Rolls_: [{stringified_rejects}]\n"
+            elif self.roll_data['disadvantage']:
+                posted_text += f"Rolled with Disadvantage\n" \
+                               f"_Rejected Rolls_: [{stringified_rejects}]\n"
+            else:
+                pass                   
+            if d20s_condition and crit_fail and crit_success:
+                posted_text += f"Wow! You got a Critical Success and a Critical Failure!\n"
+            elif d20s_condition and crit_fail:
+                posted_text += f"**Critical Failure**! Await your fate!\n"
+            elif d20s_condtion and crit_success:
+                posted_text += f"**Critical Success**! Roll again!\n"
+            else:
+                pass
+
+
+            return posted_text
+
+
+
+]class DiceCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -214,7 +253,6 @@ class DiceCog(commands.Cog):
 
         roll_results = RollCalculator.die_results()
 
-        roller = ctx.message.author.name
         msg = await ctx.send(string_value)
 
         await msg.add_reaction(":repeat:")
