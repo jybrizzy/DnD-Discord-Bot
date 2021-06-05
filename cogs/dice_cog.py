@@ -25,6 +25,7 @@ class RollParser:
 
         self.roll_str = self.roll_str.lower().strip()
 
+        """
         # Check for & parse parentheses and multiplier
         paren_check = re.findall(
             r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
@@ -46,9 +47,9 @@ class RollParser:
             self.roll_str = paren_check[1]
         else:
             self.roll_str = paren_check[1]
-
+        """
         # Find Base Roll
-        main_die_list = re.findall(r"[^+|^-]\b(\d*[d]\d+)\b", self.roll_str)
+        main_die_list = re.findall(r"(?<!\+|-)(\d*[d]\d+)", self.roll_str)
         if len(main_die_list) > self.max_rolls:
             raise ValueError("List is too long")
         raw_die_numbers = [
@@ -56,6 +57,7 @@ class RollParser:
         ]  # ->[('',6),]
         main_die_tuples = []
         for dice, sides in raw_die_numbers:
+            dice, sides = int(dice), int(sides)
             if not dice:
                 dice = 1
             elif not sides:
@@ -80,7 +82,7 @@ class RollParser:
 
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
-        raw_modifier = re.findall(r"([+|-])(\d*[d])?(\d+)", self.roll_str)
+        raw_modifier = re.findall(r"([\+-])(\d*[d])?(\d+)", self.roll_str)
         modifier_list = []
         for mod_tuple in raw_modifier:
             if not mod_tuple[0]:
@@ -114,10 +116,10 @@ class RollParser:
 
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
-            "\s*(?<!dis)(advantage|advan|ad|a)\s*", self.roll_str, flags=re.IGNORECASE
+            r"\s*(?<!dis)(advantage|advan|ad|a)\s*", self.roll_str, flags=re.IGNORECASE
         )
         disadvantage = re.findall(
-            "\s*(disadvantage|disadv|disv|dis|da)\s*",
+            r"\s*(disadvantage|disadv|disv|dis|da)\s*",
             self.roll_str,
             flags=re.IGNORECASE,
         )
@@ -156,8 +158,6 @@ class RollCalculator:
         else:
             self.roll_results = roll_results
         self.roll_data = None
-        self.dice = None
-        self.sides = None
 
     def die_roller(self, num_of_dice, type_of_die):
         return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
@@ -192,7 +192,7 @@ class RollCalculator:
                     res_tup = self.disadvantage(dice, sides)
                     # res_tup, rej_tup = zip(*dis_list)
                 else:
-                    res_tup = tuple(self.die_roller(dice, sides), None)
+                    res_tup = (self.die_roller(dice, sides), None)
                     # rej_list = ()
 
                 res_list.append(res_tup)
@@ -202,10 +202,9 @@ class RollCalculator:
 
         self.roll_results["Results_Rejects"] = res_list
         # self.roll_results['Rejects'] = rej_list
-        self.roll_results["Pretotals"] = list(map(sum, res_list))
-        self.roll_results["Totals"] = [
-            pretotal + mods for pretotal in self.roll_results["Pretotal"]
-        ]
+        self.roll_results["Pretotal"] = [sum(result[0]) for result in res_list][0]
+        self.roll_results["Total"] = self.roll_results["Pretotal"] + mods
+
         return self.roll_results
 
     def string_constructor(self, ctx):
@@ -217,7 +216,8 @@ class RollCalculator:
             )  # [((1,5,10), (1,4,6))] -> [(1,5,10), (1,4,6)]
             stringified_rolls = []
             for res_rej in dice_rolls:
-                stringified_roll = ", ".join(str(roll) for roll in res_rej if not None)
+                if res_rej is not None:
+                    stringified_roll = ", ".join(str(roll) for roll in res_rej)
                 stringified_rolls.append(stringified_roll)
             d20s_condition = any(
                 [roll for roll in self.roll_data["main_roll"] if roll[1] == 20]
@@ -239,12 +239,11 @@ class RollCalculator:
             else:
                 crit_fail, crit_sucess = False, False
 
-            pretotal = self.roll_results["Pretotals"]
-            total = self.roll_results["Totals"]
+            pretotal = self.roll_results.get("Pretotal", 0)
+            total = self.roll_results["Total"]
             # custom emoji
-            posted_text = f"""{ctx.author.mention} :d20:\n
-                              {self.roll_string}: [{stringified_rolls[0]}]\n
-                              **Pretotal**: {pretotal}\n
+            posted_text = f"""{ctx.author.mention} <:d20:849391713336426556>\n
+                              {self.roll_string}: [ {stringified_rolls[0]} ]\n
                               **Total**: {total}\n"""
 
             if self.roll_data["advantage"]:
@@ -281,21 +280,22 @@ class DiceCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="roll", aliases=("r"))
+    @commands.command(name="roll", aliases=("r",))
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_results = RollCalculator(die_string)
         roll_string = roll_results.string_constructor(ctx)
 
         msg = await ctx.send(roll_string)
+        repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
 
-        await msg.add_reaction(":repeat:")
+        await msg.add_reaction(repeat)
 
         while True:
             try:
                 CHECK = (
                     lambda reaction, user: user == ctx.author
-                    and str(reaction.emoji) == ":repeat:"
+                    and str(reaction.emoji) == repeat
                 )
                 reaction, user = await self.bot.wait_for(
                     "reaction", check=CHECK, timeout=60.0
@@ -305,12 +305,9 @@ class DiceCog(commands.Cog):
                 await msg.clear_reactions()
 
             else:
-                if reaction == ":repeat":
-
-                    roll_results = RollCalculator(die_string)
-                    roll_string = roll_results.string_constructor(ctx)
-
-                    await ctx.send(roll_results)
+                if reaction == repeat:
+                    pass
+                    # self.roll_cmd(ctx, die_string)
 
 
 def setup(bot):
