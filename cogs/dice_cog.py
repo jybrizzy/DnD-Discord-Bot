@@ -82,7 +82,7 @@ class RollParser:
 
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
-        raw_modifier = re.findall(r"([\+-])(\d*[d])?(\d+)", self.roll_str)
+        raw_modifier = re.findall(r"([\+-])\s*(\d*[d])?\s*(\d+)", self.roll_str)
         modifier_list = []
         for mod_tuple in raw_modifier:
             if not mod_tuple[0]:
@@ -99,8 +99,8 @@ class RollParser:
                     ]
                     try:
                         modifier = RollCalculator().die_roller(
-                            mod_dice, int(mod_tuple[2])
-                        )
+                            mod_dice[0], int(mod_tuple[2])
+                        )[0]
                     except:
                         raise ValueError("Must assign # of sides to mod die")
 
@@ -114,6 +114,7 @@ class RollParser:
 
             modifier_list.append(modifier)
 
+        self.roll["modifier"] = modifier_list
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
             r"\s*(?<!dis)(advantage|advan|ad|a)\s*", self.roll_str, flags=re.IGNORECASE
@@ -242,9 +243,11 @@ class RollCalculator:
             pretotal = self.roll_results.get("Pretotal", 0)
             total = self.roll_results["Total"]
             # custom emoji
-            posted_text = f"""{ctx.author.mention} <:d20:849391713336426556>\n
-                              {self.roll_string}: [ {stringified_rolls[0]} ]\n
-                              **Total**: {total}\n"""
+            posted_text = (
+                f"{ctx.author.mention} <:d20:849391713336426556>\n"
+                f"{self.roll_string}: [ {stringified_rolls[0]} ]\n"
+                f"**Total**: {total}\n"
+            )
 
             if self.roll_data["advantage"]:
                 posted_text += (
@@ -286,6 +289,10 @@ class DiceCog(commands.Cog):
         roll_results = RollCalculator(die_string)
         roll_string = roll_results.string_constructor(ctx)
 
+        try:
+            await ctx.message.delete()
+        except discord.HTTPException:
+            print("didn't happen")
         msg = await ctx.send(roll_string)
         repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
 
@@ -300,14 +307,13 @@ class DiceCog(commands.Cog):
                 reaction, user = await self.bot.wait_for(
                     "reaction", check=CHECK, timeout=60.0
                 )
+                if reaction == repeat:
+                    roll_results = RollCalculator(die_string)
+                    roll_string = roll_results.string_constructor(ctx)
+                    await ctx.send(roll_string)
 
             except asyncio.TimeoutError:
                 await msg.clear_reactions()
-
-            else:
-                if reaction == repeat:
-                    pass
-                    # self.roll_cmd(ctx, die_string)
 
 
 def setup(bot):
