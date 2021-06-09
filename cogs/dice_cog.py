@@ -287,18 +287,18 @@ class DiceCog(commands.Cog):
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_results = RollCalculator(die_string)
-        roll_string = roll_results.string_constructor(ctx)
-
         try:
             await ctx.message.delete()
         except discord.HTTPException:
             print("didn't happen")
-        msg = await ctx.send(roll_string)
-        repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
-
-        await msg.add_reaction(repeat)
 
         while True:
+            roll_string = roll_results.string_constructor(ctx)
+
+            msg = await ctx.send(roll_string)
+
+            repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
+            await msg.add_reaction(repeat)
             try:
                 CHECK = (
                     lambda reaction, user: user == ctx.author
@@ -307,10 +307,9 @@ class DiceCog(commands.Cog):
                 reaction, user = await self.bot.wait_for(
                     "reaction", check=CHECK, timeout=60.0
                 )
-                if reaction == repeat:
-                    roll_results = RollCalculator(die_string)
-                    roll_string = roll_results.string_constructor(ctx)
-                    await ctx.send(roll_string)
+                # if reaction == repeat:
+                # roll_string2 = roll_results.string_constructor(ctx)
+                # await ctx.send(roll_string2)
 
             except asyncio.TimeoutError:
                 await msg.clear_reactions()
