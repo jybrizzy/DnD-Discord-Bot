@@ -217,18 +217,24 @@ class RollCalculator:
             )  # [((1,5,10), (1,4,6))] -> [(1,5,10), (1,4,6)]
             stringified_rolls = []
             for res_rej in dice_rolls:
-                if res_rej is not None:
+                stringified_roll = None
+                if res_rej is not None and len(res_rej) > 1:
                     stringified_roll = ", ".join(str(roll) for roll in res_rej)
-                stringified_rolls.append(stringified_roll)
+                elif res_rej is not None:
+                    stringified_roll = str(res_rej[0])
+                else:
+                    pass
+                if stringified_roll is not None:
+                    stringified_rolls.append(stringified_roll)
             d20s_condition = any(
                 [roll for roll in self.roll_data["main_roll"] if roll[1] == 20]
             )
             if d20s_condition:
-                if 1 in dice_rolls:
+                if 1 in dice_rolls[0]:
                     crit_fail = True
                 else:
                     crit_fail = False
-                if 20 in dice_rolls:
+                if 20 in dice_rolls[0]:
                     crit_sucess = True
                 else:
                     crit_sucess = False
@@ -287,32 +293,35 @@ class DiceCog(commands.Cog):
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_results = RollCalculator(die_string)
+        roll_string = roll_results.string_constructor(ctx)
+
+        msg = await ctx.send(roll_string)
+
+        repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
+        await msg.add_reaction(repeat)
+
         try:
             await ctx.message.delete()
         except discord.HTTPException:
             print("didn't happen")
 
         while True:
-            roll_string = roll_results.string_constructor(ctx)
-
-            msg = await ctx.send(roll_string)
-
-            repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
-            await msg.add_reaction(repeat)
             try:
                 CHECK = (
                     lambda reaction, user: user == ctx.author
                     and str(reaction.emoji) == repeat
                 )
+
                 reaction, user = await self.bot.wait_for(
-                    "reaction", check=CHECK, timeout=60.0
+                    "reaction_add", check=CHECK, timeout=60.0
                 )
-                # if reaction == repeat:
-                # roll_string2 = roll_results.string_constructor(ctx)
-                # await ctx.send(roll_string2)
 
             except asyncio.TimeoutError:
                 await msg.clear_reactions()
+            else:
+                await msg.remove_reaction(reaction, ctx.author)
+                reroll = roll_results.string_constructor(ctx)
+                await ctx.send(reroll)
 
 
 def setup(bot):
