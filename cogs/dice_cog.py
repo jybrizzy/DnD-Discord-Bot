@@ -25,29 +25,33 @@ class RollParser:
 
         self.roll_str = self.roll_str.lower().strip()
 
-        """
         # Check for & parse parentheses and multiplier
-        paren_check = re.findall(
-            r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
-        )
-        paren_check = list(itertools.chain(*paren_check))  # Removes tuple inside list
-        if not paren_check[1]:
-            raise ValueError("No dice string to parse!")
-        elif paren_check[0] and paren_check[-1]:
-            raise ValueError("You cannot have more than 1 multiplier")
-        elif paren_check[0] or paren_check[-1]:
-            multiplier_list = paren_check[::2]
-            multiplier = int(list(filter(None, multiplier_list))[0])
-            if not multiplier:
-                raise ValueError("Invalid multiplier formatting")
-            elif multiplier == 0:
-                raise ValueError("Cannot have *0")
+        if re.search(r"\((.*?)\)", self.roll_str):
+            paren_check = re.findall(
+                r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
+            )
+            paren_check = list(
+                itertools.chain(*paren_check)
+            )  # Removes tuple inside list
+            if not paren_check[1]:
+                raise ValueError("No dice string to parse!")
+            elif paren_check[0] and paren_check[-1]:
+                raise ValueError("You cannot have more than 1 multiplier")
+            elif paren_check[0] or paren_check[-1]:
+                multiplier_list = paren_check[::2]
+                multiplier = int(list(filter(None, multiplier_list))[0])
+                if not multiplier:
+                    raise ValueError("Invalid multiplier formatting")
+                elif multiplier <= 0:
+                    raise ValueError("Cannot have *0 or negative values")
+                else:
+                    self.roll["multiplier"] = multiplier
+                self.roll_str = paren_check[1]
             else:
-                self.roll["multiplier"] = multiplier
-            self.roll_str = paren_check[1]
+                self.roll_str = paren_check[1]
         else:
-            self.roll_str = paren_check[1]
-        """
+            pass
+
         # Find Base Roll
         main_die_list = re.findall(r"(?<!\+|-)(\d*[d]\d+)", self.roll_str)
         if len(main_die_list) > self.max_rolls:
@@ -77,7 +81,7 @@ class RollParser:
         self.roll["main_roll"] = main_die_tuples
 
         # turn to integers
-        # raw_rolls = [self.die_roller(dice, sides) for dice, sides in paired_die]
+        # raw_rolls = [RollCalculator.die_roller(dice, sides) for dice, sides in paired_die]
         # pretotals = [sum(x) for x in rolls_raw]
 
         # Find Modifiers
@@ -160,18 +164,21 @@ class RollCalculator:
             self.roll_results = roll_results
         self.roll_data = None
 
-    def die_roller(self, num_of_dice, type_of_die):
+    @staticmethod
+    def die_roller(num_of_dice, type_of_die):
         return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
     def advantage(self, num_of_dice, type_of_die):
-        roll1, roll2 = self.die_roller(num_of_dice, type_of_die), self.die_roller(
-            num_of_dice, type_of_die
+        roll1, roll2 = (
+            RollCalculator.die_roller(num_of_dice, type_of_die),
+            RollCalculator.die_roller(num_of_dice, type_of_die),
         )
         return [(max(*rolls), min(*rolls)) for rolls in zip(roll1, roll2)]
 
     def disadvantage(self, num_of_dice, type_of_die):
-        roll1, roll2 = self.die_roller(num_of_dice, type_of_die), self.die_roller(
-            num_of_dice, type_of_die
+        roll1, roll2 = (
+            RollCalculator.die_roller(num_of_dice, type_of_die),
+            RollCalculator.die_roller(num_of_dice, type_of_die),
         )
         return [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
 
@@ -193,7 +200,7 @@ class RollCalculator:
                     res_tup = self.disadvantage(dice, sides)
                     # res_tup, rej_tup = zip(*dis_list)
                 else:
-                    res_tup = (self.die_roller(dice, sides), None)
+                    res_tup = (RollCalculator.die_roller(dice, sides), None)
                     # rej_list = ()
 
                 res_list.append(res_tup)
@@ -290,7 +297,7 @@ class DiceCog(commands.Cog):
         self.bot = bot
 
     @commands.command(name="roll", aliases=("r",))
-    async def roll_cmd(self, ctx, *, die_string=None):
+    async def roll_cmd(self, ctx, *, die_string: str = "1d20"):
 
         roll_results = RollCalculator(die_string)
         roll_string = roll_results.string_constructor(ctx)
@@ -319,7 +326,7 @@ class DiceCog(commands.Cog):
             except asyncio.TimeoutError:
                 await msg.clear_reactions()
             else:
-                await msg.remove_reaction(reaction, ctx.author)
+                await msg.remove_reaction(reaction, user)
                 reroll = roll_results.string_constructor(ctx)
                 await ctx.send(reroll)
 
