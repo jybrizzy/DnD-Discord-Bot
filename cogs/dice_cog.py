@@ -176,7 +176,7 @@ class RollCalculator:
 
     @staticmethod
     def die_roller(num_of_dice, type_of_die):
-        return (randint(1, int(type_of_die)) for _ in range(int(num_of_dice)))
+        return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
     def advantage(self, num_of_dice, type_of_die):
         roll1, roll2 = (
@@ -196,7 +196,9 @@ class RollCalculator:
     def calculate_results(self):
 
         res_list = []
-        Results = namedtuple("Results", ["accepted", "rejected"])
+        Results = namedtuple(
+            "Results", ["accepted", "rejected"]
+        )  # class name in quotations
 
         for _ in range(self.roll_data["multiplier"]):
             for dice, sides in self.roll_data["main_roll"]:
@@ -207,7 +209,7 @@ class RollCalculator:
                     res_tup = self.disadvantage(dice, sides)
                     res_tup = [Results(result) for result in res_tup]
                 else:
-                    res_tup = RollCalculator.die_roller(dice, sides), None
+                    res_tup = Results(RollCalculator.die_roller(dice, sides), None)
                     # rej_list = ()
 
                 res_list.append(res_tup)
@@ -224,24 +226,18 @@ class RollCalculator:
 
     def string_constructor(self, ctx):
         _ = self.calculate_results
-        if self.roll_data["multiplier"] == 1:
-            dice_rolls = list(
-                itertools.chain(*self.roll_results["Results_Rejects"])
-            )  # [((1,5,10), (1,4,6))] -> [(1,5,10), (1,4,6)]
-            stringified_rolls = []
-            for res_rej in dice_rolls:
-                stringified_roll = None
-                if res_rej is not None and len(res_rej) > 1:
-                    stringified_roll = ", ".join(str(roll) for roll in res_rej)
-                elif res_rej is not None:
-                    stringified_roll = str(res_rej[0])
-                else:
-                    pass
-                if stringified_roll is not None:
-                    stringified_rolls.append(stringified_roll)
-            d20s_condition = any(
-                [roll for roll in self.roll_data["main_roll"] if roll[1] == 20]
-            )
+        String_Results = namedtuple("String_Results", ["accepted", "rejected"])
+        stringified_rolls = []
+        for dice_rolls in self.roll_results["Results_Rejects"]:
+            """Loops over dice multiples: most likely to be a single loop"""
+            string_results = ", ".join(str(roll) for roll in dice_rolls.accepted)
+            if dice_rolls.rejected is not None:
+                string_rejects = ", ".join(str(roll) for roll in dice_rolls.rejected)
+            else:
+                string_rejects = None
+
+            d20s_condition = any([roll for roll in dice_rolls.accepted if roll == 20])
+
             if d20s_condition:
                 if 1 in dice_rolls[0]:
                     crit_fail = True
@@ -253,30 +249,33 @@ class RollCalculator:
                     crit_sucess = False
 
                 crits_n_fails = re.compile(r"\b(20|1)\b")
-                stringified_rolls[0] = crits_n_fails.sub(
-                    r"**\1**", stringified_rolls[0]
-                )
+                string_results = crits_n_fails.sub(r"**\1**", string_results)
             else:
                 crit_fail, crit_sucess = False, False
 
+            stringified_result = String_Results(string_results, string_rejects)
+            stringified_rolls.append(stringified_result)
+
+        if self.roll_data["multiplier"] == 1:
+            stringified_rolls = stringified_rolls[0]
             pretotal = self.roll_results.get("Pretotal", 0)
             total = self.roll_results["Total"]
             # custom emoji
             posted_text = (
                 f"{ctx.author.mention} <:d20:849391713336426556>\n"
-                f"{self.roll_string}: [ {stringified_rolls[0]} ]\n"
+                f"{self.roll_string}: [ {stringified_rolls.accepted} ]\n"
                 f"**Total**: {total}\n"
             )
 
             if self.roll_data["advantage"]:
                 posted_text += (
                     f"Rolled with Advantage\n"
-                    f"_Rejected Rolls_: [{stringified_rolls[1]}]\n"
+                    f"_Rejected Rolls_: [{stringified_rolls.rejected}]\n"
                 )
             elif self.roll_data["disadvantage"]:
                 posted_text += (
                     f"Rolled with Disadvantage\n"
-                    f"_Rejected Rolls_: [{stringified_rolls[1]}]\n"
+                    f"_Rejected Rolls_: [{stringified_rolls.rejected}]\n"
                 )
             else:
                 pass
@@ -293,7 +292,7 @@ class RollCalculator:
 
         else:
             pass
-            # for roll_result in self.roll_results['Results_Rejects']:
+            # Modify for multipliers
 
         return posted_text
 
@@ -303,7 +302,7 @@ class DiceCog(commands.Cog):
         self.bot = bot
 
     @commands.command(name="roll", aliases=("r",))
-    async def roll_cmd(self, ctx, *, die_string: str = "1d20"):
+    async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_results = RollCalculator(die_string)
         roll_string = roll_results.string_constructor(ctx)
