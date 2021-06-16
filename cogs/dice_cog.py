@@ -108,7 +108,7 @@ class RollParser:
                     ]
                     try:
                         # Comback and fix this
-                        modifier = RollCalculator().die_roller(
+                        modifier = RollCalculator.die_roller(
                             mod_dice[0], int(mod_tuple[2])
                         )[0]
                     except:
@@ -183,67 +183,76 @@ class RollCalculator:
             RollCalculator.die_roller(num_of_dice, type_of_die),
             RollCalculator.die_roller(num_of_dice, type_of_die),
         )
-        return [(max(*rolls), min(*rolls)) for rolls in zip(roll1, roll2)]
+        advantage = [(max(*rolls), min(*rolls)) for rolls in zip(roll1, roll2)]
+        return [accpt for accpt, _ in advantage], [rej for _, rej in advantage]
 
     def disadvantage(self, num_of_dice, type_of_die):
         roll1, roll2 = (
             RollCalculator.die_roller(num_of_dice, type_of_die),
             RollCalculator.die_roller(num_of_dice, type_of_die),
         )
-        return [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
+        disadvantage = [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
+        return [accpt for accpt, _ in disadvantage], [rej for _, rej in disadvantage]
 
     @property
     def calculate_results(self):
 
         res_list = []
-        Results = namedtuple(
-            "Results", ["accepted", "rejected"]
-        )  # class name in quotations
-
         for _ in range(self.roll_data["multiplier"]):
             for dice, sides in self.roll_data["main_roll"]:
+                results_dict = dict.fromkeys(["accepted", "rejected"])
                 if self.roll_data["advantage"]:
-                    res_tup = self.advantage(dice, sides)
-                    res_tup = [Results(result) for result in res_tup]
-                elif self.roll_data["disadvantage"]:
-                    res_tup = self.disadvantage(dice, sides)
-                    res_tup = [Results(result) for result in res_tup]
-                else:
-                    res_tup = Results(RollCalculator.die_roller(dice, sides), None)
-                    # rej_list = ()
+                    results_dict["accepted"], results_dict["rejected"] = self.advantage(
+                        dice, sides
+                    )
 
-                res_list.append(res_tup)
-                # rej_list.append(rej_tup)
+                elif self.roll_data["disadvantage"]:
+                    (
+                        results_dict["accepted"],
+                        results_dict["rejected"],
+                    ) = self.disadvantage(dice, sides)
+
+                else:
+                    results_dict["accepted"] = RollCalculator.die_roller(dice, sides)
+                    results_dict["rejected"] = None
+
+                res_list.append(results_dict)
 
         mods = sum(self.roll_data["modifier"])
 
         self.roll_results["Results_Rejects"] = res_list
-        # self.roll_results['Rejects'] = rej_list
-        self.roll_results["Pretotal"] = [sum(result[0]) for result in res_list][0]
+        self.roll_results["Pretotal"] = [
+            sum(result["accepted"]) for result in res_list
+        ][0]
         self.roll_results["Total"] = self.roll_results["Pretotal"] + mods
 
         return self.roll_results
 
     def string_constructor(self, ctx):
         _ = self.calculate_results
-        String_Results = namedtuple("String_Results", ["accepted", "rejected"])
+        String_Results = namedtuple(
+            "String_Results", ["accepted", "rejected"]
+        )  # class name in quotations
+
         stringified_rolls = []
         for dice_rolls in self.roll_results["Results_Rejects"]:
             """Loops over dice multiples: most likely to be a single loop"""
-            string_results = ", ".join(str(roll) for roll in dice_rolls.accepted)
-            if dice_rolls.rejected is not None:
-                string_rejects = ", ".join(str(roll) for roll in dice_rolls.rejected)
+            string_results = ", ".join(str(roll) for roll in dice_rolls["accepted"])
+            if dice_rolls["rejected"] is not None:
+                string_rejects = ", ".join(str(roll) for roll in dice_rolls["rejected"])
             else:
                 string_rejects = None
 
-            d20s_condition = any([roll for roll in dice_rolls.accepted if roll == 20])
+            d20s_condition = any(
+                [roll.sides for roll in self.roll_data["main_roll"] if roll.sides == 20]
+            )
 
             if d20s_condition:
-                if 1 in dice_rolls[0]:
+                if 1 in dice_rolls["accepted"]:
                     crit_fail = True
                 else:
                     crit_fail = False
-                if 20 in dice_rolls[0]:
+                if 20 in dice_rolls["accepted"]:
                     crit_sucess = True
                 else:
                     crit_sucess = False
@@ -263,19 +272,19 @@ class RollCalculator:
             # custom emoji
             posted_text = (
                 f"{ctx.author.mention} <:d20:849391713336426556>\n"
-                f"{self.roll_string}: [ {stringified_rolls.accepted} ]\n"
-                f"**Total**: {total}\n"
+                f"{self.roll_string} : [ {stringified_rolls.accepted} ]\n"
+                f"**Total** : {total}\n"
             )
 
             if self.roll_data["advantage"]:
                 posted_text += (
                     f"Rolled with Advantage\n"
-                    f"_Rejected Rolls_: [{stringified_rolls.rejected}]\n"
+                    f"_Rejected Rolls_ : [ {stringified_rolls.rejected} ]\n"
                 )
             elif self.roll_data["disadvantage"]:
                 posted_text += (
                     f"Rolled with Disadvantage\n"
-                    f"_Rejected Rolls_: [{stringified_rolls.rejected}]\n"
+                    f"_Rejected Rolls_ : [ {stringified_rolls.rejected} ]\n"
                 )
             else:
                 pass
@@ -322,6 +331,8 @@ class DiceCog(commands.Cog):
                 CHECK = (
                     lambda reaction, user: user == ctx.author
                     and str(reaction.emoji) == repeat
+                    and user != self.bot.user
+                    and reaction.message.id == msg.id
                 )
 
                 reaction, user = await self.bot.wait_for(
