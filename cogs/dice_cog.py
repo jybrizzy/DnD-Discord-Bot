@@ -60,7 +60,7 @@ class RollParser:
             raise ValueError("List is too long")
         raw_die_numbers = [
             tuple(map(int, die.split("d", 1))) for die in main_die_list
-        ]  # ->[('','6'),]
+        ]  # ->[('','6'),('1', '20')]
 
         main_die = []
         Dice_Sides = namedtuple("Dice_Sides", ["dice", "sides"])
@@ -84,19 +84,18 @@ class RollParser:
 
         self.roll["main_roll"] = main_die
 
-        # turn to integers
-        # raw_rolls = [RollCalculator.die_roller(dice, sides) for dice, sides in paired_die]
-        # pretotals = [sum(x) for x in rolls_raw]
-
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
         raw_modifier = re.findall(r"([\+-])\s*(\d*[d])?\s*(\d+)", self.roll_str)
         modifier_list = []
 
         if not all(raw_modifier):
-            modifier_list = [0]
+            modifier_list = [0]  # Set modifiers to 0 if regex query empty
         else:
             for mod_tuple in raw_modifier:
+                # 0 is sign
+                # 1 is the # of dice
+                # 2 is dice type or integer modifier
                 sign = mod_tuple[0].strip()  # +/- sign
                 sign = 1 if sign == "+" else -1 if sign == "-" else None
 
@@ -107,10 +106,10 @@ class RollParser:
                         for dice in re.findall(r"\d+", mod_tuple[1])
                     ]
                     try:
-                        # Comback and fix this
                         modifier = RollCalculator.die_roller(
                             mod_dice[0], int(mod_tuple[2])
                         )[0]
+                        modifier *= sign
                     except:
                         raise ValueError("Must assign # of sides to mod die")
 
@@ -128,12 +127,12 @@ class RollParser:
 
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
-            r"\s*(?<!dis)(advantage|advan|ad|a)\s*",
+            r"(?>\b|\d)(?<!dis)(advantage|advan|adv|ad|a)\b",
             self.roll_str,
             flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
-            r"\s*(disadvantage|disadv|disv|dis|da)\s*",
+            r"(?>\b|\d)(disadvantage|disadv|disv|dis|da|d)\b",
             self.roll_str,
             flags=re.IGNORECASE,
         )
@@ -178,7 +177,8 @@ class RollCalculator:
     def die_roller(num_of_dice, type_of_die):
         return [randint(1, int(type_of_die)) for _ in range(int(num_of_dice))]
 
-    def advantage(self, num_of_dice, type_of_die):
+    @staticmethod
+    def advantage(num_of_dice, type_of_die):
         roll1, roll2 = (
             RollCalculator.die_roller(num_of_dice, type_of_die),
             RollCalculator.die_roller(num_of_dice, type_of_die),
@@ -186,7 +186,8 @@ class RollCalculator:
         advantage = [(max(*rolls), min(*rolls)) for rolls in zip(roll1, roll2)]
         return [accpt for accpt, _ in advantage], [rej for _, rej in advantage]
 
-    def disadvantage(self, num_of_dice, type_of_die):
+    @staticmethod
+    def disadvantage(num_of_dice, type_of_die):
         roll1, roll2 = (
             RollCalculator.die_roller(num_of_dice, type_of_die),
             RollCalculator.die_roller(num_of_dice, type_of_die),
@@ -202,15 +203,16 @@ class RollCalculator:
             for dice, sides in self.roll_data["main_roll"]:
                 results_dict = dict.fromkeys(["accepted", "rejected"])
                 if self.roll_data["advantage"]:
-                    results_dict["accepted"], results_dict["rejected"] = self.advantage(
-                        dice, sides
-                    )
+                    (
+                        results_dict["accepted"],
+                        results_dict["rejected"],
+                    ) = RollCalculator.advantage(dice, sides)
 
                 elif self.roll_data["disadvantage"]:
                     (
                         results_dict["accepted"],
                         results_dict["rejected"],
-                    ) = self.disadvantage(dice, sides)
+                    ) = RollCalculator.disadvantage(dice, sides)
 
                 else:
                     results_dict["accepted"] = RollCalculator.die_roller(dice, sides)
@@ -273,8 +275,12 @@ class RollCalculator:
             posted_text = (
                 f"{ctx.author.mention} <:d20:849391713336426556>\n"
                 f"{self.roll_string} : [ {stringified_rolls.accepted} ]\n"
-                f"**Total** : {total}\n"
             )
+
+            if len(self.roll_data["modifier"]) > 1:
+                posted_text += f"**Pretotal**: {pretotal}\n" f"**Total** : {total}\n"
+            else:
+                posted_text += f"**Total** : {total}\n"
 
             if self.roll_data["advantage"]:
                 posted_text += (
