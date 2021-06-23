@@ -127,12 +127,12 @@ class RollParser:
 
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
-            r"(?>\b|\d)(?<!dis)(advantage|advan|adv|ad|a)\b",
+            r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)\b",
             self.roll_str,
             flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
-            r"(?>\b|\d)(disadvantage|disadv|disv|dis|da|d)\b",
+            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da|d)\b",
             self.roll_str,
             flags=re.IGNORECASE,
         )
@@ -223,10 +223,10 @@ class RollCalculator:
         mods = sum(self.roll_data["modifier"])
 
         self.roll_results["Results_Rejects"] = res_list
-        self.roll_results["Pretotal"] = [
-            sum(result["accepted"]) for result in res_list
-        ][0]
-        self.roll_results["Total"] = self.roll_results["Pretotal"] + mods
+        self.roll_results["Pretotal"] = [sum(result["accepted"]) for result in res_list]
+        self.roll_results["Total"] = [
+            pretot + mods for pretot in self.roll_results["Pretotal"]
+        ]
 
         return self.roll_results
 
@@ -267,30 +267,38 @@ class RollCalculator:
             stringified_result = String_Results(string_results, string_rejects)
             stringified_rolls.append(stringified_result)
 
-        if self.roll_data["multiplier"] == 1:
-            stringified_rolls = stringified_rolls[0]
-            pretotal = self.roll_results.get("Pretotal", 0)
-            total = self.roll_results["Total"]
-            # custom emoji
-            posted_text = (
-                f"{ctx.author.mention} <:d20:849391713336426556>\n"
-                f"{self.roll_string} : [ {stringified_rolls.accepted} ]\n"
-            )
-
-            if len(self.roll_data["modifier"]) > 1:
-                posted_text += f"**Pretotal**: {pretotal}\n" f"**Total** : {total}\n"
+        for multiple, stringified_roll in enumerate(stringified_rolls):
+            pretotal = self.roll_results["Pretotal"][multiple]
+            total = self.roll_results["Total"][multiple]
+            if self.roll_data["multiplier"] > 1:
+                posted_text = (
+                    f"{ctx.author.mention} <:d20:849391713336426556>\n"
+                    f"{self.roll_string}\n"
+                    f"Roll {multiple+1} : [ {stringified_roll.accepted} ]\n"
+                    f"**Total**: {total}\n"
+                )
             else:
-                posted_text += f"**Total** : {total}\n"
+                posted_text = (
+                    f"{ctx.author.mention} <:d20:849391713336426556>\n"
+                    f"{self.roll_string} : [ {stringified_roll.accepted} ]\n"
+                )
+
+                if len(self.roll_data["modifier"]) > 1:
+                    posted_text += (
+                        f"**Pretotal**: {pretotal}\n" f"**Total** : {total}\n"
+                    )
+                else:
+                    posted_text += f"**Total** : {total}\n"
 
             if self.roll_data["advantage"]:
                 posted_text += (
                     f"Rolled with Advantage\n"
-                    f"_Rejected Rolls_ : [ {stringified_rolls.rejected} ]\n"
+                    f"_Rejected Rolls_ : [ {stringified_roll.rejected} ]\n"
                 )
             elif self.roll_data["disadvantage"]:
                 posted_text += (
                     f"Rolled with Disadvantage\n"
-                    f"_Rejected Rolls_ : [ {stringified_rolls.rejected} ]\n"
+                    f"_Rejected Rolls_ : [ {stringified_roll.rejected} ]\n"
                 )
             else:
                 pass
@@ -304,10 +312,6 @@ class RollCalculator:
                 posted_text += f"**Critical Success**! Roll again!\n"
             else:
                 pass
-
-        else:
-            pass
-            # Modify for multipliers
 
         return posted_text
 
