@@ -14,12 +14,9 @@ class RollParser:
     max_multiplier = 10
     max_rolls = 10
 
-    def __init__(self, roll_string, roll=None):
+    def __init__(self, roll_string):
         self.roll_str = roll_string
-        if roll is None:
-            self.roll = {}
-        else:
-            self.roll = roll
+        self.roll = {}
 
     @property
     def delineater(self):
@@ -53,40 +50,10 @@ class RollParser:
         else:
             pass
 
-        # Find Base Roll
-        main_die_list = re.findall(r"(?<!\+|-)(\d*[d]\d+)", self.roll_str)
-        if len(main_die_list) > self.max_rolls:
-            # What?
-            raise ValueError("List is too long")
-        raw_die_numbers = [
-            tuple(map(int, die.split("d", 1))) for die in main_die_list
-        ]  # ->[('','6'),('1', '20')]
-
-        main_die = []
-        Dice_Sides = namedtuple("Dice_Sides", ["dice", "sides"])
-        for dice, sides in raw_die_numbers:
-            if not dice:
-                dice = 1
-            elif not sides:
-                sides = 20
-            elif dice >= self.max_dice and sides >= self.max_sides:
-                dice = self.max_dice
-                sides = self.max_sides
-                raise ValueError("Too many rolls/sides")
-            elif dice >= self.max_dice:
-                dice = self.max_dice
-            elif sides >= self.max_sides:
-                sides = self.max_sides
-            else:
-                dice, sides = dice, sides
-
-            main_die.append(Dice_Sides(dice, sides))
-
-        self.roll["main_roll"] = main_die
-
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
-        raw_modifier = re.findall(r"([\+-])\s*(\d*[d])?\s*(\d+)", self.roll_str)
+        modifier_reg = r"([\+-])\s*(\d*[d])?\s*(\d+)\s*"
+        raw_modifier = re.findall(modifier_reg, self.roll_str)
         modifier_list = []
 
         if not all(raw_modifier):
@@ -125,6 +92,37 @@ class RollParser:
 
         self.roll["modifier"] = modifier_list
 
+        # Find Base Roll
+        self.roll_str = re.sub(modifier_reg, "", self.roll_str)
+        main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_str)
+        if len(main_die_list) > self.max_rolls:
+            raise ValueError("List is too long")
+        raw_die_numbers = [
+            tuple(map(int, die.split("d", 1))) for die in main_die_list
+        ]  # ->[('','6'),('1', '20')]
+
+        main_die = []
+        Dice_Sides = namedtuple("Dice_Sides", ["dice", "sides"])
+        for dice, sides in raw_die_numbers:
+            if not dice:
+                dice = 1
+            elif not sides:
+                sides = 20
+            elif dice >= self.max_dice and sides >= self.max_sides:
+                dice = self.max_dice
+                sides = self.max_sides
+                raise ValueError("Too many rolls/sides")
+            elif dice >= self.max_dice:
+                dice = self.max_dice
+            elif sides >= self.max_sides:
+                sides = self.max_sides
+            else:
+                dice, sides = dice, sides
+
+            main_die.append(Dice_Sides(dice, sides))
+
+        self.roll["main_roll"] = main_die
+
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
             r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)\b",
@@ -151,11 +149,30 @@ class RollParser:
             self.roll["advantage"] = any(advantage)
             self.roll["disadvantage"] = any(disadvantage)
 
+        # keep highest/drop lowest
+        keep_drop = re.findall(
+            r"(kh|dl)(\d+)",
+            self.roll_str,
+        )
+
+        keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
+        if int(parse_val) > dice:
+            raise ValueError("Cannot keep/drop more values than you rolled.")
+        elif keep_drop_chc == "kh":
+            parse_value = int(parse_val)
+        elif keep_drop_chc == "dl":
+            parse_value = dice - int(parse_val)
+        else:
+            parse_value = 0
+
+        self.roll["retain_number"] = parse_value
+
         self.roll["main_roll"] = self.roll.get("main_roll", [Dice_Sides(1, 20)])
         self.roll["modifier"] = self.roll.get("modifier", [0])
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
+        self.roll["retain_number"] = self.roll.get("multiplier", 0)
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
@@ -239,7 +256,24 @@ class RollCalculator:
         stringified_rolls = []
         for dice_rolls in self.roll_results["Results_Rejects"]:
             """Loops over dice multiples: most likely to be a single loop"""
-            string_results = ", ".join(str(roll) for roll in dice_rolls["accepted"])
+            if self.roll_data["retain_number"] > 0:
+                num2keep = -1 * self.roll_data["retain_number"]
+                indices2keep = sorted(
+                    range(len(dice_rolls["accepted"])),
+                    key=lambda x: dice_rolls["accepted"][x],
+                )[num2keep:]
+                string_dice_accepted = [str(roll) for roll in dice_rolls["accepted"]]
+                for index, value in enumerate(
+                    str(roll) for roll in dice_rolls["accepted"]
+                ):
+                    if index not in indices2keep:
+                        string_dice_accepted[index] = f"~~{value}~~"
+                    else:
+                        continue
+            else:
+                string_dice_accepted = [str(roll) for roll in dice_rolls["accepted"]]
+
+            string_results = ", ".join(roll for roll in string_dice_accepted)
             if dice_rolls["rejected"] is not None:
                 string_rejects = ", ".join(str(roll) for roll in dice_rolls["rejected"])
             else:
@@ -267,21 +301,21 @@ class RollCalculator:
             stringified_result = String_Results(string_results, string_rejects)
             stringified_rolls.append(stringified_result)
 
+        posted_text = (
+            f"{ctx.author.mention} <:d20:849391713336426556>\n" f"{self.roll_string} "
+        )
         for multiple, stringified_roll in enumerate(stringified_rolls):
             pretotal = self.roll_results["Pretotal"][multiple]
             total = self.roll_results["Total"][multiple]
             if self.roll_data["multiplier"] > 1:
-                posted_text = (
-                    f"{ctx.author.mention} <:d20:849391713336426556>\n"
-                    f"{self.roll_string}\n"
+                if multiple == 0:
+                    posted_text += "\n"
+                posted_text += (
                     f"Roll {multiple+1} : [ {stringified_roll.accepted} ]\n"
                     f"**Total**: {total}\n"
                 )
             else:
-                posted_text = (
-                    f"{ctx.author.mention} <:d20:849391713336426556>\n"
-                    f"{self.roll_string} : [ {stringified_roll.accepted} ]\n"
-                )
+                posted_text += f": [ {stringified_roll.accepted} ]\n"
 
                 if len(self.roll_data["modifier"]) > 1:
                     posted_text += (
@@ -317,10 +351,12 @@ class RollCalculator:
 
 
 class DiceCog(commands.Cog):
+    """Dice related commands"""
+
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="roll", aliases=("r",))
+    @commands.command(name="roll", aliases=("r", "d20"))
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_results = RollCalculator(die_string)
@@ -355,6 +391,9 @@ class DiceCog(commands.Cog):
                 await msg.remove_reaction(reaction, user)
                 reroll = roll_results.string_constructor(ctx)
                 await ctx.send(reroll)
+
+    # @commands.command(name="rollAbilities", aliases=("roll_abilities", "d20"))
+    # async def roll_cmd(self, ctx, *, die_string=None):
 
 
 def setup(bot):
