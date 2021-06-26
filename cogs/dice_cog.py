@@ -172,7 +172,7 @@ class RollParser:
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
-        self.roll["retain_number"] = self.roll.get("multiplier", 0)
+        self.roll["retain_number"] = self.roll.get("retain_number", 0)
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
@@ -212,6 +212,15 @@ class RollCalculator:
         disadvantage = [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
         return [accpt for accpt, _ in disadvantage], [rej for _, rej in disadvantage]
 
+    def keep_highest_generator(self, list_of_rolls):
+        amount2keep = -1 * self.roll_data["retain_number"]
+        for dice_rolls in list_of_rolls:
+            indices2keep = sorted(
+                range(len(dice_rolls["accepted"])),
+                key=lambda x: dice_rolls["accepted"][x],
+            )[amount2keep:]
+            yield (indices2keep)
+
     @property
     def calculate_results(self):
 
@@ -237,10 +246,22 @@ class RollCalculator:
 
                 res_list.append(results_dict)
 
+        indices_to_keep = self.keep_highest_generator(res_list)
+        pretotal = []
+        for dice_result in res_list:
+            kept_dice = []
+            ind2k = next(indices_to_keep)
+            for index, rolls in enumerate(dice_result["accepted"]):
+                if index in ind2k:
+                    kept_dice.append(rolls)
+                else:
+                    continue
+            pretotal.append(sum(kept_dice))
+
         mods = sum(self.roll_data["modifier"])
 
         self.roll_results["Results_Rejects"] = res_list
-        self.roll_results["Pretotal"] = [sum(result["accepted"]) for result in res_list]
+        self.roll_results["Pretotal"] = pretotal
         self.roll_results["Total"] = [
             pretot + mods for pretot in self.roll_results["Pretotal"]
         ]
@@ -248,24 +269,22 @@ class RollCalculator:
         return self.roll_results
 
     def string_constructor(self, ctx):
+        """Constructs string to be sent Discord side. Returns posted_text"""
+
+        stringified_rolls = []
         _ = self.calculate_results
         String_Results = namedtuple(
             "String_Results", ["accepted", "rejected"]
         )  # class name in quotations
-
-        stringified_rolls = []
+        list_o_indices = self.keep_highest_generator(
+            self.roll_results["Results_Rejects"]
+        )
         for dice_rolls in self.roll_results["Results_Rejects"]:
             """Loops over dice multiples: most likely to be a single loop"""
+            indices2keep = next(list_o_indices)
             if self.roll_data["retain_number"] > 0:
-                num2keep = -1 * self.roll_data["retain_number"]
-                indices2keep = sorted(
-                    range(len(dice_rolls["accepted"])),
-                    key=lambda x: dice_rolls["accepted"][x],
-                )[num2keep:]
                 string_dice_accepted = [str(roll) for roll in dice_rolls["accepted"]]
-                for index, value in enumerate(
-                    str(roll) for roll in dice_rolls["accepted"]
-                ):
+                for index, value in enumerate(roll for roll in dice_rolls["accepted"]):
                     if index not in indices2keep:
                         string_dice_accepted[index] = f"~~{value}~~"
                     else:
