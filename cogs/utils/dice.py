@@ -19,35 +19,77 @@ class RollParser:
             self.roll_str = roll_string.lower().strip()
         self.roll = {}
 
+    def roll_check(self, dice, sides):
+        if not dice:
+            dice = 1
+        if not sides:
+            sides = 20
+        if dice >= self.max_dice and sides >= self.max_sides:
+            dice = self.max_dice
+            sides = self.max_sides
+            warning = (
+                "Surpassed the maximum allowable dice and sides that can be thrown."
+            )
+        elif dice >= self.max_dice:
+            dice = self.max_dice
+            sides = sides
+            warning = "Surpassed the maximum allowable dice that can be thrown."
+        elif sides >= self.max_sides:
+            dice = dice
+            sides = self.max_sides
+            warning = "Surpassed the maximum allowable dice that can be thrown."
+        elif dice < 1 and sides < 1:
+            dice, sides = 1, 1
+            warning = "Invalid number of die and sides."
+        elif dice < 1:
+            dice = 1
+            sides = sides
+            warning = "Invalid number of die."
+        elif sides < 1:
+            dice = dice
+            sides = sides
+            warning = "Invalid number of sides."
+        else:
+            dice, sides = dice, sides
+            warning = ""
+
+        return dice, sides, warning or None
+
     @property
     def delineater(self):
 
+        self.roll["warning"] = set()
         # Check for & parse parentheses and multiplier
         if re.search(r"\((.*?)\)", self.roll_str):
             paren_check = re.findall(
                 r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
             )
+            # 0 is potential multiplier
+            # 1 is content w/in parenthesis
+            # 2 is potential multiplier
+
             paren_check = list(
                 itertools.chain(*paren_check)
             )  # Removes tuple inside list
             if not paren_check[1]:
-                raise ValueError("No dice string to parse!")
-            elif paren_check[0] and paren_check[-1]:
-                raise ValueError("You cannot have more than 1 multiplier")
+                return "No dice string to parse. You must include a dice string if including parentheses"
+            elif paren_check[0] and paren_check[-1] or len(paren_check) > 3:
+                return "You cannot have more than 1 multiplier"
             elif paren_check[0] or paren_check[-1]:
                 multiplier_list = paren_check[::2]
                 multiplier = int(list(filter(None, multiplier_list))[0])
                 if not multiplier:
-                    raise ValueError("Invalid multiplier formatting")
+                    return "Invalid multiplier formatting"
                 elif multiplier <= 0:
-                    raise ValueError("Cannot have *0 or negative values")
+                    self.roll["multiplier"] = 1
+                    self.roll["warning"].add("Cannot have 0 or negative multipliers")
                 else:
                     self.roll["multiplier"] = multiplier
                 self.roll_str = paren_check[1]
             else:
                 self.roll_str = paren_check[1]
         else:
-            pass
+            self.roll["multiplier"] = 1
 
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
@@ -67,17 +109,23 @@ class RollParser:
 
                 if mod_tuple[1]:
 
-                    mod_dice = [
-                        int(dice) if dice else 1
-                        for dice in re.findall(r"\d+", mod_tuple[1])
-                    ]
+                    mod_dice_strings = re.findall(r"\d+", mod_tuple[1])
+                    mod_dice = (
+                        [int(dice) for dice in mod_dice_strings]
+                        if mod_dice_strings
+                        else [1]
+                    )
+                    mod_die, mod_sides, mod_warning = self.roll_check(
+                        mod_dice[0], int(mod_tuple[2])
+                    )
+                    if mod_warning:
+                        self.roll["warning"].add(mod_warning)
                     try:
-                        modifier = RollCalculator.die_roller(
-                            mod_dice[0], int(mod_tuple[2])
-                        )[0]
+                        modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
-                    except:
-                        raise ValueError("Must assign # of sides to mod die")
+                    except Exception as err:
+                        # Deprecated: look into creating one
+                        print(f"{err}")
 
                 else:
                     try:
@@ -101,24 +149,12 @@ class RollParser:
         ]  # ->[('','6'),('1', '20')]
 
         main_die = []
-        Dice_Sides = namedtuple("Dice_Sides", ["dice", "sides"])
         for dice, sides in raw_die_numbers:
-            if not dice:
-                dice = 1
-            elif not sides:
-                sides = 20
-            elif dice >= self.max_dice and sides >= self.max_sides:
-                dice = self.max_dice
-                sides = self.max_sides
-                raise ValueError("Too many rolls/sides")
-            elif dice >= self.max_dice:
-                dice = self.max_dice
-            elif sides >= self.max_sides:
-                sides = self.max_sides
-            else:
-                dice, sides = dice, sides
+            dice, sides, mod_warning = self.roll_check(dice, sides)
+            if mod_warning:
+                self.roll["warning"].add(mod_warning)
 
-            main_die.append(Dice_Sides(dice, sides))
+            main_die.append({"dice": dice, "sides": sides})
 
         self.roll["main_roll"] = main_die
 
@@ -150,7 +186,7 @@ class RollParser:
 
         # keep highest/drop lowest
         keep_drop = re.findall(
-            r"(kh|dl)(\d+)",
+            r"(kh|dl)\s*?(\d+)",
             self.roll_str,
         )
         if keep_drop:
@@ -168,7 +204,7 @@ class RollParser:
 
         self.roll["retain_number"] = parse_value
 
-        self.roll["main_roll"] = self.roll.get("main_roll", [Dice_Sides(1, 20)])
+        self.roll["main_roll"] = self.roll.get("main_roll", [{"dice": 1, "sides": 20}])
         self.roll["modifier"] = self.roll.get("modifier", [0])
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
@@ -180,16 +216,16 @@ class RollParser:
 
 
 class RollCalculator:
-    def __init__(self, roll_string=None, roll_results=None):
+    def __init__(self, roll_string=None, roll_data=None):
         if roll_string is None:
             self.roll_string = "1d20"
         else:
             self.roll_string = roll_string.strip().lower()
-        if roll_results is None:
-            self.roll_results = dict()
+        if roll_data is None:
+            self.roll_data = RollParser(self.roll_string).delineater
         else:
-            self.roll_results = roll_results
-        self.roll_data = RollParser(roll_string).delineater
+            self.roll_data = roll_data
+        self.roll_results = dict()
 
     @staticmethod
     def die_roller(num_of_dice, type_of_die):
@@ -227,7 +263,8 @@ class RollCalculator:
 
         res_list = []
         for _ in range(self.roll_data["multiplier"]):
-            for dice, sides in self.roll_data["main_roll"]:
+            for die_dict in self.roll_data["main_roll"]:
+                dice, sides = die_dict["dice"], die_dict["sides"]
                 results_dict = dict.fromkeys(["accepted", "rejected"])
                 if self.roll_data["advantage"]:
                     (
@@ -300,7 +337,11 @@ class RollCalculator:
                 string_rejects = None
 
             d20s_condition = any(
-                [roll.sides for roll in self.roll_data["main_roll"] if roll.sides == 20]
+                [
+                    roll["sides"]
+                    for roll in self.roll_data["main_roll"]
+                    if roll["sides"] == 20
+                ]
             )
 
             if d20s_condition:

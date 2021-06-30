@@ -52,8 +52,17 @@ class DiceCog(commands.Cog):
         aliases=("roll_abilities", "rollabilities", "ra", "rollStats", "roll_stats"),
     )
     async def roll_abilities_cmd(self, ctx):
-        die_string = "6 * (4d6 dl1)"
-        roll_results = RollCalculator(die_string)
+
+        roll = {
+            "main_roll": {"dice": 4, "sides": 6},
+            "modifier": [0],
+            "advantage": False,
+            "disadvantage": False,
+            "multiplier": 6,
+            "retain_number": 3,
+            "warning": set(),
+        }
+        roll_results = RollCalculator(roll_data=roll)
         roll_string = roll_results.string_constructor(ctx)
 
         await ctx.send(roll_string)

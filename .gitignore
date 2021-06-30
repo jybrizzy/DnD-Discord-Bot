@@ -1,6 +1,7 @@
 .vscode/
 venv/
 config.json
-class_icons/
+dnd_data/class_icons/
 under_construction/
 cogs/__pycache__/
+cogs/utils/__pycache__/
