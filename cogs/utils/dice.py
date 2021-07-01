@@ -27,33 +27,31 @@ class RollParser:
         if dice >= self.max_dice and sides >= self.max_sides:
             dice = self.max_dice
             sides = self.max_sides
-            warning = (
-                "Surpassed the maximum allowable dice and sides that can be thrown."
-            )
+            warning = "Surpassed the maximum allowable dice and sides that can be thrown. Rolling {dice}d{sides} instead."
         elif dice >= self.max_dice:
             dice = self.max_dice
             sides = sides
-            warning = "Surpassed the maximum allowable dice that can be thrown."
+            warning = "Surpassed the maximum allowable dice that can be thrown. Rolling {dice}d{sides} instead."
         elif sides >= self.max_sides:
             dice = dice
             sides = self.max_sides
-            warning = "Surpassed the maximum allowable dice that can be thrown."
+            warning = f"Surpassed the maximum allowable dice that can be thrown. Rolling {dice}d{sides} instead."
         elif dice < 1 and sides < 1:
             dice, sides = 1, 1
-            warning = "Invalid number of die and sides."
+            warning = "Invalid number of die and sides. Rolling {dice}d{sides} instead."
         elif dice < 1:
             dice = 1
             sides = sides
-            warning = "Invalid number of die."
+            warning = f"Invalid number of die. Rolling {dice}d{sides} instead."
         elif sides < 1:
             dice = dice
             sides = sides
-            warning = "Invalid number of sides."
+            warning = "Invalid number of sides. Rolling {dice}d{sides} instead."
         else:
             dice, sides = dice, sides
             warning = ""
 
-        return dice, sides, warning or None
+        return dice, sides, warning
 
     @property
     def delineater(self):
@@ -96,6 +94,7 @@ class RollParser:
         modifier_reg = r"([\+-])\s*(\d*[d])?\s*(\d+)\s*"
         raw_modifier = re.findall(modifier_reg, self.roll_str)
         modifier_list = []
+        modifier_str_list = []
 
         if not all(raw_modifier):
             modifier_list = [0]  # Set modifiers to 0 if regex query empty
@@ -105,7 +104,7 @@ class RollParser:
                 # 1 is the # of dice
                 # 2 is dice type or integer modifier
                 sign = mod_tuple[0].strip()  # +/- sign
-                sign = 1 if sign == "+" else -1 if sign == "-" else None
+                sign_multiple = 1 if sign == "+" else -1 if sign == "-" else None
 
                 if mod_tuple[1]:
 
@@ -120,6 +119,7 @@ class RollParser:
                     )
                     if mod_warning:
                         self.roll["warning"].add(mod_warning)
+                    final_mod_string = f"{sign} {mod_die}d{mod_sides} "
                     try:
                         modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
@@ -129,15 +129,18 @@ class RollParser:
 
                 else:
                     try:
-                        modifier = sign * int(mod_tuple[2])
+                        final_mod_string = f"{sign} {mod_tuple[2]} "
+                        modifier = sign_multiple * int(mod_tuple[2])
                     except ValueError as verr:
                         print(
                             f"modifer was unable to parse modification string: {verr}"
                         )
 
                 modifier_list.append(modifier)
+                modifier_str_list.append(final_mod_string)
 
         self.roll["modifier"] = modifier_list
+        self.roll["string_modifier"] = modifier_str_list
 
         # Find Base Roll
         self.roll_str = re.sub(modifier_reg, "", self.roll_str)
@@ -192,7 +195,7 @@ class RollParser:
         if keep_drop:
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
             if int(parse_val) > dice:
-                raise ValueError("Cannot keep/drop more values than you rolled.")
+                return "Cannot keep/drop more values than you rolled."
             elif keep_drop_chc == "kh":
                 parse_value = int(parse_val)
             elif keep_drop_chc == "dl":
@@ -206,6 +209,7 @@ class RollParser:
 
         self.roll["main_roll"] = self.roll.get("main_roll", [{"dice": 1, "sides": 20}])
         self.roll["modifier"] = self.roll.get("modifier", [0])
+        self.roll["string_modifier"] = self.roll.get("string_modifier", [""])
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
@@ -305,6 +309,26 @@ class RollCalculator:
         ]
 
         return self.roll_results
+
+    def rollstr_from_rolldata(self):
+        """method that modifies string to account for any changes made to the user input string
+        Returns: new_roll_str (used in string_constructor method for output compiling)"""
+        new_roll_str = ""
+        roll_dict = self.roll_data["main_roll"][0]
+        new_roll_str += f'{roll_dict["dice"]}d{roll_dict["sides"]}'
+        if any(self.roll_data["string_modifier"]):
+            new_roll_str += " "
+            new_roll_str += ", ".join(self.roll_data["string_modifier"])
+        if self.roll_data["advantage"]:
+            new_roll_str += " advantage"
+        if self.roll_data["disadvantage"]:
+            new_roll_str += " disadvantage"
+        if self.roll_data["retain_number"] > 0:
+            new_roll_str += f' kh{self.roll_data["retain_number"]}'
+        if self.roll_data["multiplier"] > 1:
+            new_roll_str = f'{self.roll_data["multiplier"]} * ({new_roll_str})'
+
+        return new_roll_str
 
     def string_constructor(self, ctx):
         """Constructs string to be sent Discord side. Returns posted_text"""
