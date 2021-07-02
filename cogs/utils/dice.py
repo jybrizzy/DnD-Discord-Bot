@@ -19,38 +19,28 @@ class RollParser:
             self.roll_str = roll_string.lower().strip()
         self.roll = {}
 
-    def roll_check(self, dice, sides):
+    def max_roll_check(self, dice, sides):
+        warning = ""
+        if dice > self.max_dice:
+            dice = self.max_dice
+            warning += f"Maximum number of die, {self.max_dice}, exceeded.\n"
+        if sides > self.max_sides:
+            sides = self.max_sides
+            warning += f"Maximum number of sides, {self.max_sides}, exceeded.\n"
+        if warning:
+            warning += f"Rolling {dice}d{sides} instead.\n"
+        return dice, sides, warning
+
+    def invalid_roll_check(self, dice, sides):
+        warning = ""
         if not dice:
             dice = 1
         if not sides:
-            sides = 20
-        if dice >= self.max_dice and sides >= self.max_sides:
-            dice = self.max_dice
-            sides = self.max_sides
-            warning = "Surpassed the maximum allowable dice and sides that can be thrown. Rolling {dice}d{sides} instead."
-        elif dice >= self.max_dice:
-            dice = self.max_dice
-            sides = sides
-            warning = "Surpassed the maximum allowable dice that can be thrown. Rolling {dice}d{sides} instead."
-        elif sides >= self.max_sides:
-            dice = dice
-            sides = self.max_sides
-            warning = f"Surpassed the maximum allowable dice that can be thrown. Rolling {dice}d{sides} instead."
-        elif dice < 1 and sides < 1:
-            dice, sides = 1, 1
-            warning = "Invalid number of die and sides. Rolling {dice}d{sides} instead."
-        elif dice < 1:
-            dice = 1
-            sides = sides
-            warning = f"Invalid number of die. Rolling {dice}d{sides} instead."
-        elif sides < 1:
-            dice = dice
-            sides = sides
-            warning = "Invalid number of sides. Rolling {dice}d{sides} instead."
-        else:
-            dice, sides = dice, sides
-            warning = ""
-
+            warning += "Invalid number of sides.\n"
+        if dice <= 0:
+            warning += f"Invalid number of die, must be a positive integer.\n"
+        if sides <= 0:
+            warning += f"Invalid number of sides, must be a positive integer.\n"
         return dice, sides, warning
 
     @property
@@ -114,7 +104,7 @@ class RollParser:
                         if mod_dice_strings
                         else [1]
                     )
-                    mod_die, mod_sides, mod_warning = self.roll_check(
+                    mod_die, mod_sides, mod_warning = self.max_roll_check(
                         mod_dice[0], int(mod_tuple[2])
                     )
                     if mod_warning:
@@ -153,9 +143,9 @@ class RollParser:
 
         main_die = []
         for dice, sides in raw_die_numbers:
-            dice, sides, mod_warning = self.roll_check(dice, sides)
+            dice, sides, mod_warning = self.max_roll_check(dice, sides)
             if mod_warning:
-                self.roll["warning"].add(mod_warning)
+                return mod_warning
 
             main_die.append({"dice": dice, "sides": sides})
 
@@ -197,15 +187,15 @@ class RollParser:
             if int(parse_val) > dice:
                 return "Cannot keep/drop more values than you rolled."
             elif keep_drop_chc == "kh":
-                parse_value = int(parse_val)
-            elif keep_drop_chc == "dl":
                 parse_value = dice - int(parse_val)
+            elif keep_drop_chc == "dl":
+                parse_value = int(parse_val)
             else:
                 parse_value = 0
         else:
             parse_value = 0
 
-        self.roll["retain_number"] = parse_value
+        self.roll["rolls_to_drop"] = parse_value
 
         self.roll["main_roll"] = self.roll.get("main_roll", [{"dice": 1, "sides": 20}])
         self.roll["modifier"] = self.roll.get("modifier", [0])
@@ -213,7 +203,7 @@ class RollParser:
         self.roll["advantage"] = self.roll.get("advantage", False)
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
-        self.roll["retain_number"] = self.roll.get("retain_number", 0)
+        self.roll["rolls_to_drop"] = self.roll.get("rolls_to_drop", 0)
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
@@ -254,7 +244,8 @@ class RollCalculator:
         return [accpt for accpt, _ in disadvantage], [rej for _, rej in disadvantage]
 
     def keep_highest_generator(self, list_of_rolls):
-        amount2keep = -1 * self.roll_data["retain_number"]
+        # needs fixing
+        amount2keep = -1 * self.roll_data["rolls_to_drop"]
         for dice_rolls in list_of_rolls:
             indices2keep = sorted(
                 range(len(dice_rolls["accepted"])),
@@ -323,8 +314,8 @@ class RollCalculator:
             new_roll_str += " advantage"
         if self.roll_data["disadvantage"]:
             new_roll_str += " disadvantage"
-        if self.roll_data["retain_number"] > 0:
-            new_roll_str += f' kh{self.roll_data["retain_number"]}'
+        if self.roll_data["rolls_to_drop"] > 0:
+            new_roll_str += f' kh{self.roll_data["rolls_to_drop"]}'
         if self.roll_data["multiplier"] > 1:
             new_roll_str = f'{self.roll_data["multiplier"]} * ({new_roll_str})'
 
@@ -344,7 +335,7 @@ class RollCalculator:
         for dice_rolls in self.roll_results["Results_Rejects"]:
             """Loops over dice multiples: most likely to be a single loop"""
             indices2keep = next(list_o_indices)
-            if self.roll_data["retain_number"] > 0:
+            if self.roll_data["rolls_to_drop"] > 0:
                 string_dice_accepted = [str(roll) for roll in dice_rolls["accepted"]]
                 for index, value in enumerate(roll for roll in dice_rolls["accepted"]):
                     if index not in indices2keep:
