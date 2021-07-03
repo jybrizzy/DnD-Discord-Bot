@@ -9,7 +9,7 @@ class RollParser:
 
     max_dice = 100
     max_sides = 1000
-    max_multiplier = 10
+    max_multiplier = 20
     max_rolls = 10
 
     def __init__(self, roll_string):
@@ -43,10 +43,21 @@ class RollParser:
             warning += f"Invalid number of sides, must be a positive integer.\n"
         return dice, sides, warning
 
+    def balanced_parens(self):
+        pairs = {"(": ")"}
+        match_chk = []
+        for char in self.roll_str:
+            if char in "(":
+                match_chk.append(char)
+            elif match_chk and char == pairs[match_chk[-1]]:
+                match_chk.pop()
+            else:
+                return False
+        return len(match_chk) == 0
+
     @property
     def delineater(self):
 
-        self.roll["warning"] = set()
         # Check for & parse parentheses and multiplier
         if re.search(r"\((.*?)\)", self.roll_str):
             paren_check = re.findall(
@@ -56,26 +67,32 @@ class RollParser:
             # 1 is content w/in parenthesis
             # 2 is potential multiplier
 
-            paren_check = list(
-                itertools.chain(*paren_check)
-            )  # Removes tuple inside list
+            # Removes tuple inside list [(1,2,3)] -> [1,2,3]
+            paren_check = list(itertools.chain(*paren_check))
             if not paren_check[1]:
-                return "No dice string to parse. You must include a dice string if including parentheses"
-            elif paren_check[0] and paren_check[-1] or len(paren_check) > 3:
-                return "You cannot have more than 1 multiplier"
-            elif paren_check[0] or paren_check[-1]:
-                multiplier_list = paren_check[::2]
-                multiplier = int(list(filter(None, multiplier_list))[0])
-                if not multiplier:
-                    return "Invalid multiplier formatting"
-                elif multiplier <= 0:
-                    self.roll["multiplier"] = 1
-                    self.roll["warning"].add("Cannot have 0 or negative multipliers")
-                else:
-                    self.roll["multiplier"] = multiplier
-                self.roll_str = paren_check[1]
+                return "Invalid format. Must include a dice roll to parse if including parentheses.\n"
             else:
-                self.roll_str = paren_check[1]
+                self.roll_str = paren_check[1].strip()
+
+            multiplier_list = paren_check[::2]
+            try:
+                multiplier = int(list(filter(None, multiplier_list)))
+            except TypeError as verr:
+                print(verr)
+                return "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
+            if multiplier > self.max_multiplier:
+                multiplier = self.max_multiplier
+                self.roll["warning"] += (
+                    f"Maximum number of multipliers, {self.max_multiplier}, exceeded.\n"
+                    f"Using {multiplier} instead.\n"
+                )
+            if multiplier <= 0:
+                return "Invalid multiplier. Multiplier cannot be less than 1.\n"
+
+            self.roll["multiplier"] = multiplier
+
+        elif self.balanced_parens():
+            return "Incomplete parenthesis. Try again."
         else:
             self.roll["multiplier"] = 1
 
@@ -104,11 +121,11 @@ class RollParser:
                         if mod_dice_strings
                         else [1]
                     )
-                    mod_die, mod_sides, mod_warning = self.max_roll_check(
+                    mod_die, mod_sides, max_mod_warning = self.max_roll_check(
                         mod_dice[0], int(mod_tuple[2])
                     )
-                    if mod_warning:
-                        self.roll["warning"].add(mod_warning)
+                    if max_mod_warning:
+                        self.roll["warning"] += max_mod_warning
                     final_mod_string = f"{sign} {mod_die}d{mod_sides} "
                     try:
                         modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
@@ -204,6 +221,7 @@ class RollParser:
         self.roll["disadvantage"] = self.roll.get("disadvantage", False)
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
         self.roll["rolls_to_drop"] = self.roll.get("rolls_to_drop", 0)
+        self.roll["warning"] = self.roll.get("warning", "")
         # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
 
         return self.roll
