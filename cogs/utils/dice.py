@@ -12,11 +12,8 @@ class RollParser:
     max_multiplier = 20
     max_rolls = 10
 
-    def __init__(self, roll_string):
-        if roll_string is None:
-            self.roll_string = "1d20"
-        else:
-            self.roll_str = roll_string.lower().strip()
+    def __init__(self, roll_string=None):
+        self.roll_string = roll_string or "1d20"
         self.roll = {}
 
     def max_roll_check(self, dice, sides):
@@ -43,10 +40,10 @@ class RollParser:
             warning += f"Invalid number of sides, must be a positive integer.\n"
         return dice, sides, warning
 
-    def balanced_parens(self):
+    def balanced_parenthesis(self, string2check):
         pairs = {"(": ")"}
         match_chk = []
-        for char in self.roll_str:
+        for char in string2check:
             if char in "(":
                 match_chk.append(char)
             elif match_chk and char == pairs[match_chk[-1]]:
@@ -57,11 +54,12 @@ class RollParser:
 
     @property
     def delineater(self):
-
+        self.roll_string = self.roll_string.lower().strip()
         # Check for & parse parentheses and multiplier
-        if re.search(r"\((.*?)\)", self.roll_str):
+        if re.search(r"\((.*?)\)", self.roll_string):
             paren_check = re.findall(
-                r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?", self.roll_str
+                r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?",
+                self.roll_string,
             )
             # 0 is potential multiplier
             # 1 is content w/in parenthesis
@@ -72,13 +70,14 @@ class RollParser:
             if not paren_check[1]:
                 return "Invalid format. Must include a dice roll to parse if including parentheses.\n"
             else:
-                self.roll_str = paren_check[1].strip()
+                self.roll_string = paren_check[1].strip()
 
             multiplier_list = paren_check[::2]
             try:
+                # have to apply int to list
                 multiplier = int(list(filter(None, multiplier_list)))
             except TypeError as verr:
-                print(verr)
+                print(f"Invalid multiplier formatting: {verr}")
                 return "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
             if multiplier > self.max_multiplier:
                 multiplier = self.max_multiplier
@@ -91,7 +90,7 @@ class RollParser:
 
             self.roll["multiplier"] = multiplier
 
-        elif self.balanced_parens():
+        elif self.balanced_parenthesis(self.roll_string):
             return "Incomplete parenthesis. Try again."
         else:
             self.roll["multiplier"] = 1
@@ -99,7 +98,7 @@ class RollParser:
         # Find Modifiers
         # if there is +- signs but list is otherwise empty raise error
         modifier_reg = r"([\+-])\s*(\d*[d])?\s*(\d+)\s*"
-        raw_modifier = re.findall(modifier_reg, self.roll_str)
+        raw_modifier = re.findall(modifier_reg, self.roll_string)
         modifier_list = []
         modifier_str_list = []
 
@@ -132,7 +131,7 @@ class RollParser:
                         modifier *= sign
                     except Exception as err:
                         # Deprecated: look into creating one
-                        print(f"{err}")
+                        print(f"Modifier error: {err}")
 
                 else:
                     try:
@@ -150,8 +149,8 @@ class RollParser:
         self.roll["string_modifier"] = modifier_str_list
 
         # Find Base Roll
-        self.roll_str = re.sub(modifier_reg, "", self.roll_str)
-        main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_str)
+        self.roll_string = re.sub(modifier_reg, "", self.roll_string)
+        main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_string)
         if len(main_die_list) > self.max_rolls:
             raise ValueError("List is too long")
         raw_die_numbers = [
@@ -171,24 +170,20 @@ class RollParser:
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
             r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)\b",
-            self.roll_str,
+            self.roll_string,
             flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
             r"(?:\b|\d)(disadvantage|disadv|disv|dis|da|d)\b",
-            self.roll_str,
+            self.roll_string,
             flags=re.IGNORECASE,
         )
 
         if advantage and disadvantage:
-            raise ValueError(
-                "You cannot have advantage and disadvantage in the same roll"
-            )
+            return "Invalid format. Cannot have advantage and disadvantage in the same roll"
 
         elif len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
-            raise ValueError(
-                "You cannot have more advantage/disadvantages than you have rolls"
-            )
+            return "You cannot have more advantage/disadvantages than you have rolls"
 
         else:
             self.roll["advantage"] = any(advantage)
@@ -197,7 +192,7 @@ class RollParser:
         # keep highest/drop lowest
         keep_drop = re.findall(
             r"(kh|dl)\s*?(\d+)",
-            self.roll_str,
+            self.roll_string,
         )
         if keep_drop:
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
@@ -222,21 +217,15 @@ class RollParser:
         self.roll["multiplier"] = self.roll.get("multiplier", 1)
         self.roll["rolls_to_drop"] = self.roll.get("rolls_to_drop", 0)
         self.roll["warning"] = self.roll.get("warning", "")
-        # adv_split_on = filter(lambda adv_item: adv_item in self.roll_str, adv_list)
+        # adv_split_on = filter(lambda adv_item: adv_item in self.roll_string, adv_list)
 
         return self.roll
 
 
 class RollCalculator:
     def __init__(self, roll_string=None, roll_data=None):
-        if roll_string is None:
-            self.roll_string = "1d20"
-        else:
-            self.roll_string = roll_string.strip().lower()
-        if roll_data is None:
-            self.roll_data = RollParser(self.roll_string).delineater
-        else:
-            self.roll_data = roll_data
+        self.roll_string = roll_string or "1d20"
+        self.roll_data = roll_data or RollParser(self.roll_string).delineater
         self.roll_results = dict()
 
     @staticmethod
@@ -261,14 +250,14 @@ class RollCalculator:
         disadvantage = [(min(*rolls), max(*rolls)) for rolls in zip(roll1, roll2)]
         return [accpt for accpt, _ in disadvantage], [rej for _, rej in disadvantage]
 
-    def keep_highest_generator(self, list_of_rolls):
+    def drop_lowest_generator(self, list_of_rolls):
         # needs fixing
-        amount2keep = -1 * self.roll_data["rolls_to_drop"]
+        amount2drop = self.roll_data["rolls_to_drop"]
         for dice_rolls in list_of_rolls:
             indices2keep = sorted(
                 range(len(dice_rolls["accepted"])),
                 key=lambda x: dice_rolls["accepted"][x],
-            )[amount2keep:]
+            )[amount2drop:]
             yield (indices2keep)
 
     @property
@@ -297,7 +286,7 @@ class RollCalculator:
 
                 res_list.append(results_dict)
 
-        indices_to_keep = self.keep_highest_generator(res_list)
+        indices_to_keep = self.drop_lowest_generator(res_list)
         pretotal = []
         for dice_result in res_list:
             kept_dice = []
@@ -347,7 +336,7 @@ class RollCalculator:
         String_Results = namedtuple(
             "String_Results", ["accepted", "rejected"]
         )  # class name in quotations
-        list_o_indices = self.keep_highest_generator(
+        list_o_indices = self.drop_lowest_generator(
             self.roll_results["Results_Rejects"]
         )
         for dice_rolls in self.roll_results["Results_Rejects"]:
@@ -378,14 +367,8 @@ class RollCalculator:
             )
 
             if d20s_condition:
-                if 1 in dice_rolls["accepted"]:
-                    crit_fail = True
-                else:
-                    crit_fail = False
-                if 20 in dice_rolls["accepted"]:
-                    crit_sucess = True
-                else:
-                    crit_sucess = False
+                crit_fail = True if 1 in dice_rolls["accepted"] else False
+                crit_sucess = True if 20 in dice_rolls["accepted"] else False
 
                 crits_n_fails = re.compile(r"\b(20|1)\b")
                 string_results = crits_n_fails.sub(r"**\1**", string_results)
@@ -399,7 +382,7 @@ class RollCalculator:
         if self.roll_data == ability_rolls_chk_dict:
             rolled_string = "Ability Score Rolls"
         else:
-            rolled_string = self.roll_string
+            rolled_string = self.roll_string.strip().lower()
 
         posted_text = (
             f"{ctx.author.mention} <:d20:849391713336426556>\n" f"{rolled_string} "
