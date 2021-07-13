@@ -3,14 +3,17 @@ import itertools
 import re
 from random import randint
 from collections import namedtuple
+import sys
+
+# print(sys.path)
 
 
 class RollParser:
 
-    max_dice = 100
-    max_sides = 1000
-    max_multiplier = 20
-    max_rolls = 10
+    MAX_DICE = 100
+    MAX_SIDES = 1000
+    MAX_MULTIPLIER = 20
+    MAX_ROLLS = 10
 
     def __init__(self, roll_string=None):
         self.roll_string = roll_string or "1d20"
@@ -18,12 +21,12 @@ class RollParser:
 
     def max_roll_check(self, dice, sides):
         warning = ""
-        if dice > self.max_dice:
-            dice = self.max_dice
-            warning += f"Maximum number of die, {self.max_dice}, exceeded.\n"
-        if sides > self.max_sides:
-            sides = self.max_sides
-            warning += f"Maximum number of sides, {self.max_sides}, exceeded.\n"
+        if dice > self.MAX_DICE:
+            dice = self.MAX_DICE
+            warning += f"Maximum number of die, {self.MAX_DICE}, exceeded.\n"
+        if sides > self.MAX_SIDES:
+            sides = self.MAX_SIDES
+            warning += f"Maximum number of sides, {self.MAX_SIDES}, exceeded.\n"
         if warning:
             warning += f"Rolling {dice}d{sides} instead.\n"
         return dice, sides, warning
@@ -48,8 +51,10 @@ class RollParser:
                 match_chk.append(char)
             elif match_chk and char == pairs[match_chk[-1]]:
                 match_chk.pop()
-            else:
+            elif char in ")":
                 return False
+            else:
+                continue
         return len(match_chk) == 0
 
     @property
@@ -75,14 +80,18 @@ class RollParser:
             multiplier_list = paren_check[::2]
             try:
                 # have to apply int to list
-                multiplier = int(list(filter(None, multiplier_list)))
+                parsed_multiplier = list(filter(None, multiplier_list))
+                if len(parsed_multiplier) == 1:
+                    multiplier = int(parsed_multiplier[0])
+                else:
+                    raise TypeError
             except TypeError as verr:
                 print(f"Invalid multiplier formatting: {verr}")
                 return "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
-            if multiplier > self.max_multiplier:
-                multiplier = self.max_multiplier
+            if multiplier > self.MAX_MULTIPLIER:
+                multiplier = self.MAX_MULTIPLIER
                 self.roll["warning"] += (
-                    f"Maximum number of multipliers, {self.max_multiplier}, exceeded.\n"
+                    f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
                     f"Using {multiplier} instead.\n"
                 )
             if multiplier <= 0:
@@ -151,7 +160,7 @@ class RollParser:
         # Find Base Roll
         self.roll_string = re.sub(modifier_reg, "", self.roll_string)
         main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_string)
-        if len(main_die_list) > self.max_rolls:
+        if len(main_die_list) > self.MAX_ROLLS:
             raise ValueError("List is too long")
         raw_die_numbers = [
             tuple(map(int, die.split("d", 1))) for die in main_die_list
@@ -251,7 +260,6 @@ class RollCalculator:
         return [accpt for accpt, _ in disadvantage], [rej for _, rej in disadvantage]
 
     def drop_lowest_generator(self, list_of_rolls):
-        # needs fixing
         amount2drop = self.roll_data["rolls_to_drop"]
         for dice_rolls in list_of_rolls:
             indices2keep = sorted(
@@ -378,6 +386,7 @@ class RollCalculator:
             stringified_result = String_Results(string_results, string_rejects)
             stringified_rolls.append(stringified_result)
 
+        # need to put this under a conditional
         ability_rolls_chk_dict = RollParser("6 * (4d6 dl1)").delineater
         if self.roll_data == ability_rolls_chk_dict:
             rolled_string = "Ability Score Rolls"

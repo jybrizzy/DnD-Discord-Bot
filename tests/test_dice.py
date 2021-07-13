@@ -2,9 +2,10 @@ from random import Random
 import unittest
 import sys
 
-# sys.path.append("c:\\Users\\jbrizzy\\Desktop\\Discord_Bot")
+# sys.path.append("C:\\Users\\jbrizzy\\Desktop\\Discord_Bot")
 print(sys.path)
-from cogs.utils.dice import RollCalculator, RollParser
+import cogs.utils.dice as UtilsDice
+
 
 DIE_EXPRESSIONS = [
     "1d20",
@@ -31,8 +32,12 @@ class TestRollParser(unittest.TestCase):
         pass
 
     def test_balanced_parenthesis(self):
-        # for (statement, expected_value) in PARENTHESIS_EXPRESSIONS:
-        self.assertEqual(RollParser().balanced_parenthesis("(1d20)"), True)
+        for (statement, expected_value) in PARENTHESIS_EXPRESSIONS:
+            with self.subTest(paren_string=statement):
+                self.assertEqual(
+                    UtilsDice.RollParser().balanced_parenthesis(statement),
+                    expected_value,
+                )
 
 
 if __name__ == "__main__":
