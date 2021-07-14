@@ -100,7 +100,7 @@ class RollParser:
             self.roll["multiplier"] = multiplier
 
         elif self.balanced_parenthesis(self.roll_string):
-            return "Incomplete parenthesis. Try again."
+            return "Incomplete parenthesis. Try again.\n"
         else:
             self.roll["multiplier"] = 1
 
@@ -115,9 +115,10 @@ class RollParser:
             modifier_list = [0]  # Set modifiers to 0 if regex query empty
         else:
             for mod_tuple in raw_modifier:
-                # 0 is sign
-                # 1 is the # of dice
-                # 2 is dice type or integer modifier
+                # within mod tuple:
+                # index 0 is sign
+                # index 1 is the # of dice (may or may not be there)
+                # index 2 is dice type or integer modifier
                 sign = mod_tuple[0].strip()  # +/- sign
                 sign_multiple = 1 if sign == "+" else -1 if sign == "-" else None
 
@@ -138,9 +139,9 @@ class RollParser:
                     try:
                         modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
-                    except Exception as err:
+                    except TypeError as moderr:
                         # Deprecated: look into creating one
-                        print(f"Modifier error: {err}")
+                        print(f"Modifier error: {moderr}")
 
                 else:
                     try:
@@ -178,25 +179,24 @@ class RollParser:
 
         # Advantage or Disadvantage on Rolls
         advantage = re.findall(
-            r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)\b",
+            r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)",
             self.roll_string,
             flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
-            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da|d)\b",
+            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da|d)",
             self.roll_string,
             flags=re.IGNORECASE,
         )
 
         if advantage and disadvantage:
-            return "Invalid format. Cannot have advantage and disadvantage in the same roll"
+            return "Invalid format. Cannot have advantage and disadvantage in the same roll./n"
 
-        elif len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
+        if len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
             return "You cannot have more advantage/disadvantages than you have rolls"
 
-        else:
-            self.roll["advantage"] = any(advantage)
-            self.roll["disadvantage"] = any(disadvantage)
+        self.roll["advantage"] = any(advantage)
+        self.roll["disadvantage"] = any(disadvantage)
 
         # keep highest/drop lowest
         keep_drop = re.findall(
@@ -206,13 +206,11 @@ class RollParser:
         if keep_drop:
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
             if int(parse_val) > dice:
-                return "Cannot keep/drop more values than you rolled."
-            elif keep_drop_chc == "kh":
+                return "Cannot keep/drop more values than you rolled.\n"
+            if keep_drop_chc == "kh":
                 parse_value = dice - int(parse_val)
-            elif keep_drop_chc == "dl":
+            if keep_drop_chc == "dl":
                 parse_value = int(parse_val)
-            else:
-                parse_value = 0
         else:
             parse_value = 0
 
@@ -387,14 +385,14 @@ class RollCalculator:
             stringified_rolls.append(stringified_result)
 
         # need to put this under a conditional
-        ability_rolls_chk_dict = RollParser("6 * (4d6 dl1)").delineater
-        if self.roll_data == ability_rolls_chk_dict:
-            rolled_string = "Ability Score Rolls"
-        else:
-            rolled_string = self.roll_string.strip().lower()
+        # ability_rolls_chk_dict = RollParser("6 * (4d6 dl1)").delineater
+        # if self.roll_data == ability_rolls_chk_dict:
+        # rolled_string = "Ability Score Rolls"
+        # else:
+        # rolled_string = self.roll_string.strip().lower()
 
         posted_text = (
-            f"{ctx.author.mention} <:d20:849391713336426556>\n" f"{rolled_string} "
+            f"{ctx.author.mention} <:d20:849391713336426556>\n" f"{self.roll_string} "
         )
         for multiple, stringified_roll in enumerate(stringified_rolls):
             pretotal = self.roll_results["Pretotal"][multiple]

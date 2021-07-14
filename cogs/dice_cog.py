@@ -3,6 +3,9 @@ import discord
 from discord.ext import commands
 
 from cogs.utils.dice import RollCalculator
+import sys
+
+print(sys.path)
 
 
 class DiceCog(commands.Cog):
@@ -62,7 +65,7 @@ class DiceCog(commands.Cog):
             "retain_number": 3,
             "warning": set(),
         }
-        roll_results = RollCalculator(roll_data=roll)
+        roll_results = RollCalculator(roll_string="Ability Score Rolls", roll_data=roll)
         roll_string = roll_results.string_constructor(ctx)
 
         await ctx.send(roll_string)
