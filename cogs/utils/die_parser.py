@@ -26,26 +26,25 @@ class RollParser:
         return dice, sides, warning
 
     def invalid_roll_check(self, dice, sides):
-        warning = ""
         if not dice:
             dice = 1
         if not sides:
-            warning += "Invalid number of sides.\n"
+            raise ValueError("Invalid number of sides.\n")
         if dice <= 0:
-            warning += f"Invalid number of die, must be a positive integer.\n"
+            raise ValueError(f"Invalid number of die, must be a positive integer.\n")
         if sides <= 0:
-            warning += f"Invalid number of sides, must be a positive integer.\n"
-        return dice, sides, warning
+            raise ValueError(f"Invalid number of sides, must be a positive integer.\n")
+        return dice, sides
 
     def balanced_parenthesis(self, string2check):
         pairs = {"(": ")"}
         match_chk = []
         for char in string2check:
-            if char in "(":
+            if char == "(":
                 match_chk.append(char)
             elif match_chk and char == pairs[match_chk[-1]]:
                 match_chk.pop()
-            elif char in ")":
+            elif char == ")":
                 return False
             else:
                 continue
@@ -64,7 +63,9 @@ class RollParser:
             # Removes tuple inside list [(1,2,3)] -> [1,2,3]
             paren_check = list(itertools.chain(*paren_check))
             if not paren_check[1]:
-                return "Invalid format. Must include a dice roll to parse if including parentheses.\n"
+                raise ValueError(
+                    "Invalid format. Must include a dice roll to parse if including parentheses.\n"
+                )
             else:
                 self.roll_string = paren_check[1].strip()
 
@@ -74,23 +75,22 @@ class RollParser:
                 if len(parsed_multiplier) == 1:
                     multiplier = int(parsed_multiplier[0])
                 else:
-                    raise TypeError
-            except TypeError as mult_err:
-                print(f"Invalid multiplier formatting: {mult_err}")
-                return "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
+                    raise ValueError
+            except ValueError as mult_err:
+                raise ValueError(
+                    "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
+                ) from mult_err
             if multiplier > self.MAX_MULTIPLIER:
                 multiplier = self.MAX_MULTIPLIER
                 self.roll["warning"] += (
                     f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
                     f"Using {multiplier} instead.\n"
                 )
-            if multiplier <= 0:
-                return "Invalid multiplier. Multiplier cannot be less than 1.\n"
 
             return multiplier
 
-        elif self.balanced_parenthesis(self.roll_string):
-            return "Incomplete parenthesis.\n"
+        elif not self.balanced_parenthesis(self.roll_string):
+            raise ValueError("Incomplete parenthesis.\n")
         else:
             return 1
 
@@ -102,7 +102,7 @@ class RollParser:
         modifier_list = []
         modifier_str_list = []
 
-        if all(raw_modifier):
+        if any(raw_modifier):
             for mod_tuple in raw_modifier:
                 # within mod tuple:
                 # index 0 is sign
@@ -128,28 +128,28 @@ class RollParser:
                     try:
                         modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
-                    except TypeError as mod_die_err:
-                        print(f"Modifier error: {mod_die_err}")
-                        return "Invalid die-type modifier format.\n"
+                    except ValueError as mod_die_err:
+                        raise ValueError(
+                            "Invalid die-type modifier format.\n"
+                        ) from mod_die_err
 
                 else:
                     try:
                         final_mod_string = f"{sign} {mod_tuple[2]} "
                         modifier = sign_multiple * int(mod_tuple[2])
                     except ValueError as mod_int_err:
-                        print(
-                            f"modifer was unable to parse modification string: {mod_int_err}"
-                        )
-                        return "Invalid integer modifier format.\n"
+                        raise ValueError(
+                            "Invalid integer-type modifier format.\n"
+                        ) from mod_int_err
 
                 modifier_list.append(modifier)
                 modifier_str_list.append(final_mod_string)
 
-            else:
-                modifier_list = [0]  # Set modifiers to 0 if regex query empty
-                modifier_str_list = [""]
+        else:
+            modifier_list = [0]  # Set modifiers to 0 if regex query empty
+            modifier_str_list = [""]
 
-            return modifier_list, modifier_str_list
+        return modifier_list, modifier_str_list
 
     def parse_base_roll(self):
         main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_string)
@@ -174,14 +174,18 @@ class RollParser:
             flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
-            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da|d)",
+            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da)",
             self.roll_string,
             flags=re.IGNORECASE,
         )
         if advantage and disadvantage:
-            return "Invalid format. Cannot have advantage and disadvantage in the same roll.\n"
+            raise ValueError(
+                "Invalid format. Cannot have advantage and disadvantage in the same roll.\n"
+            )
         if len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
-            return "You cannot have more advantage/disadvantages than you have rolls.\n"
+            raise ValueError(
+                "You cannot have more advantage/disadvantages than you have rolls.\n"
+            )
 
         return any(advantage), any(disadvantage)
 
@@ -194,7 +198,7 @@ class RollParser:
             dice = self.roll["main_roll"][0]["dice"]
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
             if int(parse_val) > dice:
-                return "Cannot keep/drop more values than you rolled.\n"
+                raise ValueError("Cannot keep/drop more values than you rolled.\n")
             if keep_drop_chc == "kh":
                 parse_value = dice - int(parse_val)
             if keep_drop_chc == "dl":
@@ -204,33 +208,24 @@ class RollParser:
 
         return parse_value
 
-    @staticmethod
-    def error_message_check(check):
-        return isinstance(check, (int, bool))
-
-    _CHECK = error_message_check.__func__()
-
     @property
     def delineater(self):
-        self.roll_string = self.roll_string.lower().strip()
+        try:
+            self.roll_string = self.roll_string.lower().strip()
 
-        self.roll["multiplier"] = self.parse_multiplier()
-        mod, string_mod = self.parse_modifier()
-        self.roll["modifier"] = mod
-        self.roll["string_modifier"] = string_mod
-        self.roll["main_roll"] = self.parse_base_roll()
-        adv, disadv = self.parse_advantage_disadvantage()
-        self.roll["advantage"] = adv
-        self.roll["disadvantage"] = disadv
-        self.roll["rolls_to_drop"] = self.parse_drop_lowest()
-        self.roll["warning"] = self.roll.get("warning", "")
+            self.roll["multiplier"] = self.parse_multiplier()
+            mod, string_mod = self.parse_modifier()
+            self.roll["modifier"] = mod
+            self.roll["string_modifier"] = string_mod
+            self.roll["main_roll"] = self.parse_base_roll()
+            adv, disadv = self.parse_advantage_disadvantage()
+            self.roll["advantage"] = adv
+            self.roll["disadvantage"] = disadv
+            self.roll["rolls_to_drop"] = self.parse_drop_lowest()
+            self.roll["warning"] = self.roll.get("warning", "")
 
-        error = [
-            RollParser.error_message_check(value)
-            for key, value in self.roll.items()
-            if key not in ["string_modifier", "warning"]
-        ]
-        if not any(error):
-            return "error"
+        except ValueError as verr:
+            # verr.__cause__:
+            return str(verr)
         else:
             return self.roll
