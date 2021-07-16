@@ -1,5 +1,6 @@
 import itertools
 import re
+from cogs.utils.errors import DiceSyntaxError
 from cogs.utils.dice import RollCalculator
 
 
@@ -29,11 +30,15 @@ class RollParser:
         if not dice:
             dice = 1
         if not sides:
-            raise ValueError("Invalid number of sides.\n")
+            raise DiceSyntaxError("Invalid number of sides.\n")
         if dice <= 0:
-            raise ValueError(f"Invalid number of die, must be a positive integer.\n")
+            raise DiceSyntaxError(
+                f"Invalid number of die, must be a positive integer.\n"
+            )
         if sides <= 0:
-            raise ValueError(f"Invalid number of sides, must be a positive integer.\n")
+            raise DiceSyntaxError(
+                f"Invalid number of sides, must be a positive integer.\n"
+            )
         return dice, sides
 
     def balanced_parenthesis(self, string2check):
@@ -63,7 +68,7 @@ class RollParser:
             # Removes tuple inside list [(1,2,3)] -> [1,2,3]
             paren_check = list(itertools.chain(*paren_check))
             if not paren_check[1]:
-                raise ValueError(
+                raise DiceSyntaxError(
                     "Invalid format. Must include a dice roll to parse if including parentheses.\n"
                 )
             else:
@@ -77,7 +82,7 @@ class RollParser:
                 else:
                     raise ValueError
             except ValueError as mult_err:
-                raise ValueError(
+                raise DiceSyntaxError(
                     "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
                 ) from mult_err
             if multiplier > self.MAX_MULTIPLIER:
@@ -90,7 +95,7 @@ class RollParser:
             return multiplier
 
         elif not self.balanced_parenthesis(self.roll_string):
-            raise ValueError("Incomplete parenthesis.\n")
+            raise DiceSyntaxError("Incomplete parenthesis.\n")
         else:
             return 1
 
@@ -118,7 +123,7 @@ class RollParser:
                         [int(dice) for dice in mod_dice_strings]
                         if mod_dice_strings
                         else [1]
-                    )
+                    )  # Set number of modifier dice
                     mod_die, mod_sides, max_mod_warning = self.max_roll_check(
                         mod_dice[0], int(mod_tuple[2])
                     )
@@ -129,7 +134,7 @@ class RollParser:
                         modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
                     except ValueError as mod_die_err:
-                        raise ValueError(
+                        raise DiceSyntaxError(
                             "Invalid die-type modifier format.\n"
                         ) from mod_die_err
 
@@ -138,7 +143,7 @@ class RollParser:
                         final_mod_string = f"{sign} {mod_tuple[2]} "
                         modifier = sign_multiple * int(mod_tuple[2])
                     except ValueError as mod_int_err:
-                        raise ValueError(
+                        raise DiceSyntaxError(
                             "Invalid integer-type modifier format.\n"
                         ) from mod_int_err
 
@@ -179,12 +184,16 @@ class RollParser:
             flags=re.IGNORECASE,
         )
         if advantage and disadvantage:
-            raise ValueError(
-                "Invalid format. Cannot have advantage and disadvantage in the same roll.\n"
+            raise DiceSyntaxError(
+                "Invalid syntax. Cannot have advantage and disadvantage in the same roll.\n"
             )
-        if len(disadvantage) > len(self.roll["main_roll"]) < len(advantage):
-            raise ValueError(
-                "You cannot have more advantage/disadvantages than you have rolls.\n"
+        if len(disadvantage) > len(self.roll["main_roll"]):
+            raise DiceSyntaxError(
+                "Invalid syntax. You cannot have more disadvantages than you have rolls.\n"
+            )
+        if len(advantage) > len(self.roll["main_roll"]):
+            raise DiceSyntaxError(
+                "Invalid syntax. You cannot have more advantages than you have rolls.\n"
             )
 
         return any(advantage), any(disadvantage)
@@ -198,7 +207,7 @@ class RollParser:
             dice = self.roll["main_roll"][0]["dice"]
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
             if int(parse_val) > dice:
-                raise ValueError("Cannot keep/drop more values than you rolled.\n")
+                raise DiceSyntaxError("Cannot keep/drop more values than you rolled.\n")
             if keep_drop_chc == "kh":
                 parse_value = dice - int(parse_val)
             if keep_drop_chc == "dl":
@@ -224,8 +233,8 @@ class RollParser:
             self.roll["rolls_to_drop"] = self.parse_drop_lowest()
             self.roll["warning"] = self.roll.get("warning", "")
 
-        except ValueError as verr:
-            # verr.__cause__:
-            return str(verr)
+        except DiceSyntaxError as die_err:
+            # die_err.__cause__
+            return str(die_err)
         else:
             return self.roll
