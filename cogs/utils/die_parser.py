@@ -30,14 +30,16 @@ class RollParser:
         if not dice:
             dice = 1
         if not sides:
-            raise DiceSyntaxError("Invalid number of sides.\n")
+            raise DiceSyntaxError(
+                "Invalid number of sides. Must include number of sides.\n"
+            )
         if dice <= 0:
             raise DiceSyntaxError(
-                f"Invalid number of die, must be a positive integer.\n"
+                "Invalid number of die, must be a positive integer.\n"
             )
         if sides <= 0:
             raise DiceSyntaxError(
-                f"Invalid number of sides, must be a positive integer.\n"
+                "Invalid number of sides, must be a positive integer.\n"
             )
         return dice, sides
 

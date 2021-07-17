@@ -5,3 +5,4 @@ dnd_data/class_icons/
 under_construction/
 cogs/__pycache__/
 cogs/utils/__pycache__/
+tests/__pycache__
