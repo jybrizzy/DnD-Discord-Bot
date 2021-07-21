@@ -1,12 +1,16 @@
 from random import Random, random
 import unittest
+
 import sys
-import functools
+from functools import partial, wraps
 
 # sys.path.append("C:\\Users\\jbrizzy\\Desktop\\Discord_Bot")
-print(sys.path)
+# print(sys.path)
 from cogs.utils.die_parser import RollParser
 from unittest.mock import patch
+
+unittest.TestLoader.sortTestMethodsUsing = None
+# component testing
 
 
 DIE_EXPRESSIONS = [
@@ -27,6 +31,11 @@ DIE_EXPRESSIONS = [
     "1d20 disadvantage",
     "advantage 4d20",
     "1d20 advantage + 5 + 1 + 2",
+    "6*(4d6 dl 1)",
+    "( 4d6 dl1 )*6",
+    "4d6 adv kh3",
+    "1d10 dis + 1d4",
+    "14d20 +2 disadvantage dl 6",
 ]
 
 
@@ -39,9 +48,31 @@ PARENTHESIS_EXPRESSIONS = [
 ]
 
 
-class ResultsGenerator:
-    def __init__(self):
-        pass
+def for_each_roll(test_func):
+    @wraps(test_func)
+    def _wrapper(self):
+        for exp in self.die_expressions:
+            with self.subTest(expression=exp):
+                test_func(self, exp)
+        return _wrapper
+
+
+"""
+def _pseudo_length_check(func, results_arg):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        results_arg_set = results_arg or []
+        if len(results_arg_set) == len(DIE_EXPRESSIONS):
+            func(*args, **kwargs)
+        else:
+            raise ValueError("Mismatched results lengths")
+
+    return wrapper
+
+
+result_length_check = partial(_pseudo_length_check, results_arg=None)
+# @result_length_check(results_arg=MULTIPLIER_TEST_LIST)
+"""
 
 
 class TestRollParser(unittest.TestCase):
@@ -56,14 +87,6 @@ class TestRollParser(unittest.TestCase):
     def tearDownClass(cls) -> None:
         del cls.die_expressions
 
-    def for_each_roll(test_func):
-        @functools.wraps(test_func)
-        def _decorator(self):
-            for exp in self.die_expressions:
-                with self.subTest(expression=exp):
-                    test_func(self, exp)
-            return _decorator
-
     def test_balanced_parenthesis(self):
         for (statement, expected_value) in PARENTHESIS_EXPRESSIONS:
             with self.subTest(paren_string=statement):
@@ -71,30 +94,38 @@ class TestRollParser(unittest.TestCase):
                     RollParser().balanced_parenthesis(statement), expected_value
                 )
 
-    MULTIPLIER_TEST_RESULTS = iter(
-        [
-            (1, "1d20"),
-            (1, "d20"),
-            (1, "&d20"),
-            (1, "2d20 + 4"),
-            (1, "1d20 + 1d6"),
-            (1, "1d20 + 1 + 1d4"),
-            (1, "1d4"),
-            (6, "4d6"),
-            (6, "4d6"),
-            (20, "1d20"),
-            (2, "1d6"),
-            (6, "10d10"),
-            (1, "6 * 1d20"),
-        ]
-    )
+    MULTIPLIER_TEST_LIST = [
+        (1, "1d20"),
+        (1, "d20"),
+        (1, "&d20"),
+        (1, "2d20 + 4"),
+        (1, "1d20 + 1d6"),
+        (1, "1d20 + 1 + 1d4"),
+        (1, "1d4"),
+        (6, "4d6"),
+        (6, "4d6"),
+        (20, "1d20"),
+        (2, "1d6"),
+        (6, "10d10"),
+        (1, "6 * 1d20"),
+        (1, "1d20 advantage"),
+        (1, "1d20 disadvantage"),
+        (1, "advantage 4d20"),
+        (1, "1d20 advantage + 5 + 1 + 2"),
+        (6, "4d6 dl 1"),
+        (6, " 4d6 dl1 "),
+        (1, "4d6 adv kh3"),
+        (1, "1d10 dis + 1d4"),
+        (1, "14d20 +2 disadvantage dl 6"),
+    ]
+    MULTIPLIER_TEST_ITER = iter(MULTIPLIER_TEST_LIST)
 
     # ("(5d10)*21", 20, "5d10"),
     # ("(1d4)", 1, "1d4"),
 
     @for_each_roll
     def test_parse_multiplier(self, roll_exp):
-        results = next(self.MULTIPLIER_TEST_RESULTS)
+        results = next(self.MULTIPLIER_TEST_ITER)
         multiplier, die_str = results
         parsed_multiplier = roll_exp.parse_multiplier()
         self.assertEqual(parsed_multiplier, multiplier)
@@ -106,6 +137,7 @@ class TestRollParser(unittest.TestCase):
         # self.assertRaises(DiceSyntaxError, RollParser('()*3').parse_multiplier())
         # self.assertRaises(DiceSyntaxError, RollParser('6*').parse_multiplier())
 
+    # fmt: off
     MODIFIER_TEST_RESULTS = iter(
         [
             ([0], [""], "1d20"),
@@ -113,12 +145,7 @@ class TestRollParser(unittest.TestCase):
             ([0], [""], "&d20"),
             ([4], ["+ 4 "], "2d20 + 4"),
             ([1, 6], ["+ 1d6 "], "1d20 "),
-            (
-                [
-                    1,
-                ]["+ 1 ", "+ 1d4 "],
-                "1d20 ",
-            ),
+            ([1,], ["+ 1 ", "+ 1d4 "], "1d20 "),
             ([0], [""], "1d4"),
             ([0], [""], "4d6"),
             ([0], [""], "4d6"),
@@ -128,7 +155,10 @@ class TestRollParser(unittest.TestCase):
             ([0], [""], "6 * 1d20"),
         ]
     )
+    # fmt: on
 
+
+"""
     @for_each_roll
     def test_parse_modifier(self, roll_exp):
         results = next(self.MODIFIER_TEST_RESULTS)
@@ -150,7 +180,8 @@ class TestRollParser(unittest.TestCase):
             ([{"dice": 2, "sides": 20}], "2d20"),
             ([{"dice": 1, "sides": 20}], "1d20 "),
             ([{"dice": 1, "sides": 20}], "1d20 "),
-            ([{"dice": 1, "sides": 4}], "1d4")([{"dice": 4, "sides": 6}], "4d6"),
+            ([{"dice": 1, "sides": 4}], "1d4"),
+            ([{"dice": 4, "sides": 6}], "4d6"),
             ([{"dice": 4, "sides": 6}], "4d6"),
             ([{"dice": 1, "sides": 20}], "1d20"),
             ([{"dice": 1, "sides": 6}], "1d6"),
@@ -162,7 +193,7 @@ class TestRollParser(unittest.TestCase):
     @for_each_roll
     def test_parse_base_roll(self, roll_exp):
         results = next(self.BASE_ROLL_TEST_RESULTS)
-        expected_roll, expected_die_str = results
+        expected_roll, _ = results
         base_roll_list = roll_exp.parse_base_roll()
 
         self.assertCountEqual(base_roll_list, expected_roll)
@@ -188,9 +219,11 @@ class TestRollParser(unittest.TestCase):
     @for_each_roll
     def test_parse_advantage_disadvantage(self, roll_exp):
         results = next(self.BASE_ROLL_TEST_RESULTS)
-        expected_advantage, expected_disadvantage, expected_die_str = results
-        base_roll_list = roll_exp.parse_advantage_disadvantage()
-
+        expected_advantage, expected_disadvantage, _ = results
+        adv_result, disadv_result = roll_exp.parse_advantage_disadvantage()
+        self.assertIs(adv_result, expected_advantage)
+        self.assertIs(disadv_result, expected_disadvantage)
+"""
 
 if __name__ == "__main__":
     unittest.main()

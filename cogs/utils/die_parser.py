@@ -1,7 +1,7 @@
 import itertools
 import re
 from cogs.utils.errors import DiceSyntaxError
-from cogs.utils.dice import RollCalculator
+from cogs.utils.die_rollers import RollMethods
 
 
 class RollParser:
@@ -60,7 +60,7 @@ class RollParser:
     def parse_multiplier(self):
         if re.search(r"\((.*?)\)", self.roll_string):
             paren_check = re.findall(
-                r"([0-9]{1,3})?\s*\*?\s*\((.*?)\)\s*\*?\s*([0-9]{1,3})?",
+                r"(\d+)?\s*\*?\s*\((.*?)\)\s*\*?\s*(\d+)?",
                 self.roll_string,
             )
             # index 0 is potential multiplier
@@ -77,22 +77,27 @@ class RollParser:
                 self.roll_string = paren_check[1].strip()
 
             multiplier_list = paren_check[::2]
-            try:
-                parsed_multiplier = list(filter(None, multiplier_list))
-                if len(parsed_multiplier) == 1:
-                    multiplier = int(parsed_multiplier[0])
-                else:
-                    raise ValueError
-            except ValueError as mult_err:
-                raise DiceSyntaxError(
-                    "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
-                ) from mult_err
-            if multiplier > self.MAX_MULTIPLIER:
-                multiplier = self.MAX_MULTIPLIER
-                self.roll["warning"] += (
-                    f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
-                    f"Using {multiplier} instead.\n"
-                )
+            if all(item is None for item in multiplier_list):
+                multiplier = 1
+            else:
+                try:
+                    parsed_multiplier = list(filter(None, multiplier_list))
+                    if len(parsed_multiplier) == 1:
+                        multiplier = int(parsed_multiplier[0])
+                    else:
+                        raise ValueError(
+                            f"Too many multipliers were parsed: {parsed_multiplier}"
+                        )
+                except ValueError as mult_err:
+                    raise DiceSyntaxError(
+                        "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
+                    ) from mult_err
+                if multiplier > self.MAX_MULTIPLIER:
+                    multiplier = self.MAX_MULTIPLIER
+                    self.roll["warning"] += (
+                        f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
+                        f"Using {multiplier} instead.\n"
+                    )
 
             return multiplier
 
@@ -133,7 +138,7 @@ class RollParser:
                         self.roll["warning"] += max_mod_warning
                     final_mod_string = f"{sign} {mod_die}d{mod_sides} "
                     try:
-                        modifier = RollCalculator.die_roller(mod_die, mod_sides)[0]
+                        modifier = RollMethods.die_roller(mod_die, mod_sides)[0]
                         modifier *= sign
                     except ValueError as mod_die_err:
                         raise DiceSyntaxError(
@@ -240,3 +245,6 @@ class RollParser:
             return str(die_err)
         else:
             return self.roll
+
+
+# RollParser("6*(1d20)*6").parse_multiplier()
