@@ -77,7 +77,7 @@ class RollParser:
                 self.roll_string = paren_check[1].strip()
 
             multiplier_list = paren_check[::2]
-            if all(item is None for item in multiplier_list):
+            if not any(item for item in multiplier_list):
                 multiplier = 1
             else:
                 try:
@@ -247,4 +247,4 @@ class RollParser:
             return self.roll
 
 
-# RollParser("6*(1d20)*6").parse_multiplier()
+# print(RollParser("1d20").__dict__)  # parse_multiplier()

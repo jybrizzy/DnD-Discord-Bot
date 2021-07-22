@@ -50,11 +50,16 @@ PARENTHESIS_EXPRESSIONS = [
 
 def for_each_roll(test_func):
     @wraps(test_func)
-    def _wrapper(self):
+    def wrapper(self):
+        print(test_func.__name__)
+        # print(self.__dict__)
         for exp in self.die_expressions:
-            with self.subTest(expression=exp):
+            with self.subTest(expression=exp.roll_string):
                 test_func(self, exp)
-        return _wrapper
+            # print(self.__dict__)
+
+    wrapper.__name__ = test_func.__name__
+    return wrapper
 
 
 """
@@ -77,14 +82,15 @@ result_length_check = partial(_pseudo_length_check, results_arg=None)
 
 class TestRollParser(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
+    def setUpClass(cls):
         cls.random = Random(30)
         cls.die_expressions = []
         for exp in DIE_EXPRESSIONS:
             cls.die_expressions.append(RollParser(exp))
+        print(cls.die_expressions[1].roll_string)
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def tearDownClass(cls):
         del cls.die_expressions
 
     def test_balanced_parenthesis(self):
@@ -113,7 +119,7 @@ class TestRollParser(unittest.TestCase):
         (1, "advantage 4d20"),
         (1, "1d20 advantage + 5 + 1 + 2"),
         (6, "4d6 dl 1"),
-        (6, " 4d6 dl1 "),
+        (6, "4d6 dl1"),
         (1, "4d6 adv kh3"),
         (1, "1d10 dis + 1d4"),
         (1, "14d20 +2 disadvantage dl 6"),
