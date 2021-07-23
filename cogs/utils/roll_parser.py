@@ -1,7 +1,7 @@
 import itertools
 import re
 from cogs.utils.errors import DiceSyntaxError
-from cogs.utils.die_rollers import RollMethods
+from cogs.utils.roll_methods import RollMethods
 
 
 class RollParser:
@@ -111,6 +111,7 @@ class RollParser:
         modifier_reg = r"([\+-])\s*(\d*[d])?\s*(\d+)\s*"
         raw_modifier = re.findall(modifier_reg, self.roll_string)
         self.roll_string = re.sub(modifier_reg, "", self.roll_string)
+        self.roll_string = self.roll_string.strip()
         modifier_list = []
         modifier_str_list = []
 
@@ -131,15 +132,16 @@ class RollParser:
                         if mod_dice_strings
                         else [1]
                     )  # Set number of modifier dice
-                    mod_die, mod_sides, max_mod_warning = self.max_roll_check(
-                        mod_dice[0], int(mod_tuple[2])
-                    )
-                    if max_mod_warning:
-                        self.roll["warning"] += max_mod_warning
-                    final_mod_string = f"{sign} {mod_die}d{mod_sides} "
+
                     try:
+                        mod_die, mod_sides, max_mod_warning = self.max_roll_check(
+                            mod_dice[0], int(mod_tuple[2])
+                        )
+                        if max_mod_warning:
+                            self.roll["warning"] += max_mod_warning
+                        final_mod_string = f"{sign} {mod_die}d{mod_sides} "
                         modifier = RollMethods.die_roller(mod_die, mod_sides)[0]
-                        modifier *= sign
+                        modifier *= sign_multiple
                     except ValueError as mod_die_err:
                         raise DiceSyntaxError(
                             "Invalid die-type modifier format.\n"
@@ -172,6 +174,7 @@ class RollParser:
         main_die = []
         for dice, sides in raw_die_numbers:
             dice, sides, mod_warning = self.max_roll_check(dice, sides)
+            # need to fix this
             if mod_warning:
                 return mod_warning
 
@@ -183,12 +186,9 @@ class RollParser:
         advantage = re.findall(
             r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)",
             self.roll_string,
-            flags=re.IGNORECASE,
         )
         disadvantage = re.findall(
-            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da)",
-            self.roll_string,
-            flags=re.IGNORECASE,
+            r"(?:\b|\d)(disadvantage|disadv|disv|dis|da)", self.roll_string
         )
         if advantage and disadvantage:
             raise DiceSyntaxError(
@@ -213,8 +213,10 @@ class RollParser:
         if keep_drop:
             dice = self.roll["main_roll"][0]["dice"]
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
-            if int(parse_val) > dice:
-                raise DiceSyntaxError("Cannot keep/drop more values than you rolled.\n")
+            if int(parse_val) >= dice:
+                raise DiceSyntaxError(
+                    "Invalid syntax. Cannot keep/drop more values than you rolled.\n"
+                )
             if keep_drop_chc == "kh":
                 parse_value = dice - int(parse_val)
             if keep_drop_chc == "dl":
@@ -241,7 +243,7 @@ class RollParser:
             self.roll["warning"] = self.roll.get("warning", "")
 
         except DiceSyntaxError as die_err:
-            # die_err.__cause__
+            # die_err.__cause__ would reveal ValueErrors
             return str(die_err)
         else:
             return self.roll
