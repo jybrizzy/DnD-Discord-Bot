@@ -35,7 +35,7 @@ DIE_EXPRESSIONS = [
     "4d6 adv kh3",
     "1d10 dis + 1d4",
     "14d20 +2 disadvantage dl 6",
-    "2d12 + 3 + 1d4 disadv dl 1 + 2",
+    "2d12 + 3 + 1d4 advan dl 1 + 2",
 ]
 
 
@@ -120,18 +120,18 @@ class TestRollParser(unittest.TestCase):
         (1, "4d6 adv kh3"),
         (1, "1d10 dis + 1d4"),
         (1, "14d20 +2 disadvantage dl 6"),
-        (1, "2d12 + 3 + 1d4 disadv dl 1 + 2"),
+        (1, "2d12 + 3 + 1d4 advan dl 1 + 2"),
     ]
     MULTIPLIER_TEST_ITER = iter(MULTIPLIER_TEST_LIST)
 
     @result_length_check(MULTIPLIER_TEST_LIST)
     @for_each_roll
     def test_parse_multiplier(self, roll_exp):
-        results = next(self.MULTIPLIER_TEST_ITER)
-        multiplier, die_str = results
-        parsed_multiplier = roll_exp.parse_multiplier()
-        self.assertEqual(parsed_multiplier, multiplier)
-        self.assertIsInstance(parsed_multiplier, int)
+        expected = next(self.MULTIPLIER_TEST_ITER)
+        expected_multiplier, die_str = expected
+        result_multiplier = roll_exp.parse_multiplier()
+        self.assertEqual(result_multiplier, expected_multiplier)
+        self.assertIsInstance(result_multiplier, int)
         self.assertEqual(roll_exp.roll_string, die_str)
         self.assertIsInstance(roll_exp.roll_string, str)
 
@@ -158,7 +158,7 @@ class TestRollParser(unittest.TestCase):
         ([0], [""], "4d6 adv kh3"),
         ([1], ["+ 1d4 "], "1d10 dis"),
         ([2], ["+ 2 "], "14d20 disadvantage dl 6"),
-        ([3, 1, 2], ["+ 3 ", "+ 1d4 ", "+ 2 "], "2d12 disadv dl 1"),
+        ([3, 1, 2], ["+ 3 ", "+ 1d4 ", "+ 2 "], "2d12 advan dl 1"),
     ]
 
     # fmt: on
@@ -167,8 +167,8 @@ class TestRollParser(unittest.TestCase):
     @result_length_check(MODIFIER_TEST_LIST)
     @for_each_roll
     def test_parse_modifier(self, roll_exp):
-        results = next(self.MODIFIER_TEST_ITER)
-        modifier_result, modifier_str_result, die_str = results
+        expected = next(self.MODIFIER_TEST_ITER)
+        modifier_result, modifier_str_result, die_str = expected
         with patch("random.randint", lambda: 1):
             modifier_list, modifier_str_list = roll_exp.parse_modifier()
 
@@ -200,44 +200,89 @@ class TestRollParser(unittest.TestCase):
         ([{"dice": 4, "sides": 6}], "4d6 adv kh3"),
         ([{"dice": 1, "sides": 10}], "1d10 dis"),
         ([{"dice": 14, "sides": 20}], "14d20 disadvantage dl 6"),
-        ([{"dice": 2, "sides": 12}], "2d12 disadv dl 1"),
+        ([{"dice": 2, "sides": 12}], "2d12 advan dl 1"),
     ]
     BASE_ROLL_TEST_ITER = iter(BASE_ROLL_TEST_LIST)
 
     @result_length_check(BASE_ROLL_TEST_LIST)
     @for_each_roll
     def test_parse_base_roll(self, roll_exp):
-        results = next(self.BASE_ROLL_TEST_ITER)
-        expected_roll, _ = results
+        expected = next(self.BASE_ROLL_TEST_ITER)
+        expected_roll, _ = expected
         base_roll_list = roll_exp.parse_base_roll()
 
         self.assertCountEqual(base_roll_list, expected_roll)
 
-    ADVANTAGE_DISADVANTAGE_TEST_LIST = iter(
-        [
-            (False, False, "1d20"),
-            (False, False, "d20"),
-            (False, False, "&d20"),
-            (False, False, "2d20 + 4"),
-            (False, False, "1d20 "),
-            (False, False, "1d20 "),
-            (False, False, "1d4"),
-            (False, False, "4d6"),
-            (False, False, "4d6"),
-            (False, False, "1d20"),
-            (False, False, "1d6"),
-            (False, False, "10d10"),
-            (False, False, "6 * 1d20"),
-        ]
-    )
+    ADVANTAGE_DISADVANTAGE_TEST_LIST = [
+        (False, False, "1d20"),
+        (False, False, "d20"),
+        (False, False, "&d20"),
+        (False, False, "2d20 + 4"),
+        (False, False, "1d20 "),
+        (False, False, "1d20 "),
+        (False, False, "1d4"),
+        (False, False, "4d6"),
+        (False, False, "4d6"),
+        (False, False, "1d20"),
+        (False, False, "1d6"),
+        (False, False, "10d10"),
+        (False, False, "6 * 1d20"),
+        (True, False, "1d20 advantage"),
+        (False, True, "1d20 disadvantage"),
+        (True, False, "advantage 4d20"),
+        (True, False, "1d20 advantage"),
+        (False, False, "4d6 dl 1"),
+        (True, False, "4d6 adv kh3"),
+        (False, True, "1d10 dis"),
+        (False, True, "14d20 disadvantage dl 6"),
+        (False, True, "2d12 advan dl 1"),
+    ]
 
+    ADVANTAGE_DISADVANTAGE_TEST_ITER = iter(ADVANTAGE_DISADVANTAGE_TEST_LIST)
+
+    @result_length_check(ADVANTAGE_DISADVANTAGE_TEST_LIST)
     @for_each_roll
     def test_parse_advantage_disadvantage(self, roll_exp):
-        results = next(self.ADVANTAGE_DISADVANTAGE_TEST_LIST)
-        expected_advantage, expected_disadvantage, _ = results
-        adv_result, disadv_result = roll_exp.parse_advantage_disadvantage()
-        self.assertIs(adv_result, expected_advantage)
-        self.assertIs(disadv_result, expected_disadvantage)
+        expected = next(self.ADVANTAGE_DISADVANTAGE_TEST_ITER)
+        expected_advantage, expected_disadvantage, _ = expected
+        result_advantage, result_disadvantage = roll_exp.parse_advantage_disadvantage()
+        self.assertIs(result_advantage, expected_advantage)
+        self.assertIs(result_disadvantage, expected_disadvantage)
+
+    DROP_LOWEST_TEST_LIST = [
+        (0, "1d20"),
+        (0, "d20"),
+        (0, "&d20"),
+        (0, "2d20 + 4"),
+        (0, "1d20 "),
+        (0, "1d20 "),
+        (0, "1d4"),
+        (0, "4d6"),
+        (0, "4d6"),
+        (0, "1d20"),
+        (0, "1d6"),
+        (0, "10d10"),
+        (0, "6 * 1d20"),
+        (0, "1d20 advantage"),
+        (0, "1d20 disadvantage"),
+        (0, "advantage 4d20"),
+        (0, "1d20 advantage"),
+        (1, "4d6 dl 1"),
+        (1, "4d6 adv kh3"),
+        (0, "1d10 dis"),
+        (6, "14d20 disadvantage dl 6"),
+        (1, "2d12 advan dl 1"),
+    ]
+
+    DROP_LOWEST_TEST_ITER = iter(DROP_LOWEST_TEST_LIST)
+
+    @result_length_check(DROP_LOWEST_TEST_LIST)
+    @for_each_roll
+    def test_parse_drop_lowest(self, roll_exp):
+        expected = next(self.DROP_LOWEST_TEST_ITER)
+        expected_parse_value, _ = expected
+        result_parse_value = roll_exp.parse_drop_lowest()
+        self.assertEqual(result_parse_value, expected_parse_value)
 
 
 # ("(5d10)*21", 20, "5d10"),
