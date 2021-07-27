@@ -26,6 +26,26 @@ class RollCalculator:
             )[amount2drop:]
             yield (indices2keep)
 
+    def roll_die(self, dice, sides):
+        results_dict = dict.fromkeys(["accepted", "rejected"])
+        if self.roll_data["advantage"]:
+            (
+                results_dict["accepted"],
+                results_dict["rejected"],
+            ) = RollMethods.advantage(dice, sides)
+
+        elif self.roll_data["disadvantage"]:
+            (
+                results_dict["accepted"],
+                results_dict["rejected"],
+            ) = RollMethods.disadvantage(dice, sides)
+
+        else:
+            results_dict["accepted"] = RollMethods.die_roller(dice, sides)
+            results_dict["rejected"] = None
+
+        return results_dict
+
     @property
     def calculate_results(self):
 
@@ -33,24 +53,8 @@ class RollCalculator:
         for _ in range(self.roll_data["multiplier"]):
             for die_dict in self.roll_data["main_roll"]:
                 dice, sides = die_dict["dice"], die_dict["sides"]
-                results_dict = dict.fromkeys(["accepted", "rejected"])
-                if self.roll_data["advantage"]:
-                    (
-                        results_dict["accepted"],
-                        results_dict["rejected"],
-                    ) = RollMethods.advantage(dice, sides)
-
-                elif self.roll_data["disadvantage"]:
-                    (
-                        results_dict["accepted"],
-                        results_dict["rejected"],
-                    ) = RollMethods.disadvantage(dice, sides)
-
-                else:
-                    results_dict["accepted"] = RollMethods.die_roller(dice, sides)
-                    results_dict["rejected"] = None
-
-                res_list.append(results_dict)
+                roll_dict = self.roll_die(dice, sides)
+                res_list.append(roll_dict)
 
         indices_to_keep = self.drop_lowest_generator(res_list)
         pretotal = []
@@ -105,7 +109,7 @@ class RollCalculator:
             self.roll_results["Results_Rejects"]
         )
         for dice_rolls in self.roll_results["Results_Rejects"]:
-            """Loops over dice multiples: most likely to be a single loop"""
+            # Loops over dice multiples: most likely to be a single loop
             indices2keep = next(list_o_indices)
             if self.roll_data["rolls_to_drop"] > 0:
                 string_dice_accepted = [str(roll) for roll in dice_rolls["accepted"]]
@@ -183,14 +187,15 @@ class RollCalculator:
                     f"Rolled with Disadvantage\n"
                     f"_Rejected Rolls_ : [ {stringified_roll.rejected} ]\n"
                 )
-            if d20s_condition:
-                if crit_fail and crit_sucess:
-                    posted_text += (
-                        f"Wow! You got a Critical Success and a Critical Failure!\n"
-                    )
-                elif crit_fail:
-                    posted_text += f"**Critical Failure**! Await your fate!\n"
-                elif d20s_condition and crit_sucess:
-                    posted_text += f"**Critical Success**! Roll again!\n"
+
+        if d20s_condition:
+            if crit_fail and crit_sucess:
+                posted_text += (
+                    f"Wow! You got a Critical Success and a Critical Failure!\n"
+                )
+            elif crit_fail:
+                posted_text += f"**Critical Failure**! Await your fate!\n"
+            elif d20s_condition and crit_sucess:
+                posted_text += f"**Critical Success**! Roll again!\n"
 
         return posted_text

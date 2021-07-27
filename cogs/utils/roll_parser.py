@@ -4,44 +4,94 @@ from cogs.utils.errors import DiceSyntaxError
 from cogs.utils.roll_methods import RollMethods
 
 
-class RollParser:
-
+class Roll:
     MAX_DICE = 100
     MAX_SIDES = 1000
-    MAX_MULTIPLIER = 20
 
-    def __init__(self, roll_string=None):
-        self.roll_string = roll_string or "1d20"
-        self.roll = {}
+    def __init__(self, die, sides):
+        self.die = die or 1
+        self.sides = sides
+        self.warning = ""
 
-    def max_roll_check(self, dice, sides):
-        warning = ""
-        if dice > self.MAX_DICE:
-            dice = self.MAX_DICE
-            warning += f"Maximum number of die, {self.MAX_DICE}, exceeded.\n"
-        if sides > self.MAX_SIDES:
-            sides = self.MAX_SIDES
-            warning += f"Maximum number of sides, {self.MAX_SIDES}, exceeded.\n"
-        if warning:
-            warning += f"Rolling {dice}d{sides} instead.\n"
-        return dice, sides, warning
+    def __str__(self):
+        return f"{self.die}d{self.sides}"
 
-    def invalid_roll_check(self, dice, sides):
-        if not dice:
-            dice = 1
-        if not sides:
+    @property
+    def max_roll_check(self):
+        if self.die > self.MAX_DICE:
+            self.die = self.MAX_DICE
+            self.warning += f"Maximum number of die, {self.MAX_DICE}, exceeded.\n"
+        if self.sides > self.MAX_SIDES:
+            self.sides = self.MAX_SIDES
+            self.warning += f"Maximum number of sides, {self.MAX_SIDES}, exceeded.\n"
+        if self.warning:
+            self.warning += f"Rolling {self.die}d{self.sides} instead.\n"
+        return self.die, self.sides, self.warning
+
+    @property
+    def invalid_roll_check(self):
+        if not self.sides:
             raise DiceSyntaxError(
                 "Invalid number of sides. Must include number of sides.\n"
             )
-        if dice <= 0:
+        if self.die <= 0:
             raise DiceSyntaxError(
                 "Invalid number of die, must be a positive integer.\n"
             )
-        if sides <= 0:
+        if self.sides <= 0:
             raise DiceSyntaxError(
                 "Invalid number of sides, must be a positive integer.\n"
             )
-        return dice, sides
+
+
+class RollData:
+
+    MAX_MULTIPLIER = 20
+    MAX_MODIFIER = 1000
+
+    def __init__(self, **kwargs):
+        self.multiplier = kwargs["multiplier"] or 1
+        self.modifier = kwargs["modifier"] or [0]
+        self.string_modifier = kwargs["string_modifier"] or [""]
+        self.main_roll = kwargs["main_roll"] or Roll(1, 20)
+        self.advantage = kwargs["advantage"] or False
+        self.disadvantage = kwargs["disadvantage"] or False
+        self.rolls_to_drop = kwargs["rolls_to_drop"] or 0
+        self.warning = kwargs["warning"] or set()
+
+    def __str__(self):
+        """roll_string from RollData"""
+        new_roll_str = ""
+        new_roll_str += str(self.main_roll)
+        if any(self.string_modifier):
+            new_roll_str += " "
+            new_roll_str += ", ".join(self.string_modifier)
+        if self.advantage:
+            new_roll_str += " advantage"
+        if self.disadvantage:
+            new_roll_str += " disadvantage"
+        if self.rolls_to_drop > 0:
+            new_roll_str += f" kh{self.rolls_to_drop}"
+        if self.multiplier > 1:
+            new_roll_str = f"{self.multiplier} * ({new_roll_str})"
+
+        return new_roll_str
+
+    @property
+    def max_multiplier_check(self):
+        if self.multiplier > self.MAX_MULTIPLIER:
+            multiplier = self.MAX_MULTIPLIER
+            self.roll["warning"] += (
+                f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
+                f"Using {multiplier} instead.\n"
+            )
+
+
+class RollParser:
+    def __init__(self, roll_string=None):
+        temp_roll_string = roll_string or "1d20"
+        self.roll_string = temp_roll_string.lower().strip()
+        self.main_die = None
 
     def balanced_parenthesis(self, string2check):
         pairs = {"(": ")"}
@@ -92,17 +142,12 @@ class RollParser:
                     raise DiceSyntaxError(
                         "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
                     ) from mult_err
-                if multiplier > self.MAX_MULTIPLIER:
-                    multiplier = self.MAX_MULTIPLIER
-                    self.roll["warning"] += (
-                        f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
-                        f"Using {multiplier} instead.\n"
-                    )
 
             return multiplier
 
         elif not self.balanced_parenthesis(self.roll_string):
             raise DiceSyntaxError("Incomplete parenthesis.\n")
+
         else:
             return 1
 
@@ -158,9 +203,8 @@ class RollParser:
 
                 modifier_list.append(modifier)
                 modifier_str_list.append(final_mod_string)
-
         else:
-            modifier_list = [0]  # Set modifiers to 0 if regex query empty
+            modifier_list = [0]
             modifier_str_list = [""]
 
         return modifier_list, modifier_str_list
@@ -171,16 +215,15 @@ class RollParser:
             tuple(map(int, die.split("d", 1))) for die in main_die_list
         ]  # ->[('',6),(1, 20)]
 
-        main_die = []
+        self.main_die = []
         for dice, sides in raw_die_numbers:
-            dice, sides, mod_warning = self.max_roll_check(dice, sides)
-            # need to fix this
-            if mod_warning:
-                return mod_warning
+            die_instance = Roll(dice, sides)
+            _ = self.main_die.max_roll_check
+            _ = self.main_die.invalid_roll_check
 
-            main_die.append({"dice": dice, "sides": sides})
+            self.main_die.append(die_instance)
 
-        return main_die
+        return self.main_die
 
     def parse_advantage_disadvantage(self):
         advantage = re.findall(
@@ -211,7 +254,7 @@ class RollParser:
             self.roll_string,
         )
         if keep_drop:
-            dice = self.roll["main_roll"][0]["dice"]
+            dice = self.main_die[0].dice
             keep_drop_chc, parse_val = keep_drop[0][0], keep_drop[0][1]
             if int(parse_val) >= dice:
                 raise DiceSyntaxError(
@@ -227,20 +270,20 @@ class RollParser:
         return parse_value
 
     @property
-    def delineater(self):
+    def create_roll_data(self):
         try:
-            self.roll_string = self.roll_string.lower().strip()
-
-            self.roll["multiplier"] = self.parse_multiplier()
             mod, string_mod = self.parse_modifier()
-            self.roll["modifier"] = mod
-            self.roll["string_modifier"] = string_mod
-            self.roll["main_roll"] = self.parse_base_roll()
             adv, disadv = self.parse_advantage_disadvantage()
-            self.roll["advantage"] = adv
-            self.roll["disadvantage"] = disadv
-            self.roll["rolls_to_drop"] = self.parse_drop_lowest()
-            self.roll["warning"] = self.roll.get("warning", "")
+            roll_inputs = {
+                "multiplier": self.parse_multiplier(),
+                "modifier": mod,
+                "string_modifier": string_mod,
+                "main_roll": self.parse_base_roll(),
+                "advantage": adv,
+                "disadvantage": disadv,
+                "rolls_to_drop": self.parse_drop_lowest(),
+                "warning": self.roll.get("warning", ""),
+            }
 
         except DiceSyntaxError as die_err:
             # die_err.__cause__ would reveal ValueErrors

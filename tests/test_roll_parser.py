@@ -126,7 +126,7 @@ class TestRollParser(unittest.TestCase):
 
     @result_length_check(MULTIPLIER_TEST_LIST)
     @for_each_roll
-    def test_parse_multiplier(self, roll_exp):
+    def test_parse_multiplier(self, roll_exp) -> None:
         expected = next(self.MULTIPLIER_TEST_ITER)
         expected_multiplier, die_str = expected
         result_multiplier = roll_exp.parse_multiplier()
@@ -166,7 +166,7 @@ class TestRollParser(unittest.TestCase):
 
     @result_length_check(MODIFIER_TEST_LIST)
     @for_each_roll
-    def test_parse_modifier(self, roll_exp):
+    def test_parse_modifier(self, roll_exp) -> None:
         expected = next(self.MODIFIER_TEST_ITER)
         modifier_result, modifier_str_result, die_str = expected
         with patch("random.randint", lambda: 1):
@@ -206,7 +206,7 @@ class TestRollParser(unittest.TestCase):
 
     @result_length_check(BASE_ROLL_TEST_LIST)
     @for_each_roll
-    def test_parse_base_roll(self, roll_exp):
+    def test_parse_base_roll(self, roll_exp) -> None:
         expected = next(self.BASE_ROLL_TEST_ITER)
         expected_roll, _ = expected
         base_roll_list = roll_exp.parse_base_roll()
@@ -242,7 +242,7 @@ class TestRollParser(unittest.TestCase):
 
     @result_length_check(ADVANTAGE_DISADVANTAGE_TEST_LIST)
     @for_each_roll
-    def test_parse_advantage_disadvantage(self, roll_exp):
+    def test_parse_advantage_disadvantage(self, roll_exp) -> None:
         expected = next(self.ADVANTAGE_DISADVANTAGE_TEST_ITER)
         expected_advantage, expected_disadvantage, _ = expected
         result_advantage, result_disadvantage = roll_exp.parse_advantage_disadvantage()
@@ -278,7 +278,7 @@ class TestRollParser(unittest.TestCase):
 
     @result_length_check(DROP_LOWEST_TEST_LIST)
     @for_each_roll
-    def test_parse_drop_lowest(self, roll_exp):
+    def test_parse_drop_lowest(self, roll_exp) -> None:
         expected = next(self.DROP_LOWEST_TEST_ITER)
         expected_parse_value, _ = expected
         result_parse_value = roll_exp.parse_drop_lowest()
