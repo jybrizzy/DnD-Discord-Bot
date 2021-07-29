@@ -10,13 +10,13 @@ class Roll:
     def __init__(self, die: int or None, sides: int, sign: str = None) -> None:
         self.die = die or 1
         self.sides = sides
-        self.sign = sign.strip()
+        self.sign = sign
         self.warning = set()
 
     def __str__(self) -> str:
         die_str = f"{self.die}d{self.sides}"
         if self.sign:
-            die_str = f"{self.sign} {die_str}"
+            die_str = f"{self.sign.strip()} {die_str}"
         return die_str
 
     def max_roll_check(self) -> set:
@@ -54,7 +54,7 @@ class RollData:
         self.multiplier = kwargs["multiplier"] or 1
         self.modifier = kwargs["modifier"] or [0]
         self.main_roll = kwargs["main_roll"] or Roll(1, 20)
-        self.advantages = kwargs["advantages"] or (False, False)
+        self.advantages = kwargs["advantages"] or 0
         self.rolls_to_drop = kwargs["rolls_to_drop"] or 0
         self.warning = kwargs["warning"] or set()
 
@@ -70,9 +70,9 @@ class RollData:
                 elif isinstance(mod, int):
                     sign = "+" if mod >= 0 else "-"
                     new_roll_str += f"{sign} {abs(mod)} "
-        if self.advantages[0]:
+        if self.advantages == 1:
             new_roll_str += " advantage"
-        if self.advantages[0]:
+        if self.advantages == -1:
             new_roll_str += " disadvantage"
         if self.rolls_to_drop > 0:
             new_roll_str += f" kh{self.rolls_to_drop}"
@@ -81,7 +81,7 @@ class RollData:
 
         return new_roll_str
 
-    def max_multiplier_check(self):
+    def max_multiplier_check(self) -> None:
         if self.multiplier > self.MAX_MULTIPLIER:
             multiplier = self.MAX_MULTIPLIER
             self.warning.add(
@@ -89,7 +89,9 @@ class RollData:
                 f"Using {multiplier} instead.\n"
             )
 
-    def advantage_disadvantage_validation(self, advantage, disadvantage) -> None:
+    def advantage_disadvantage_validation(
+        self, advantage: list, disadvantage: list
+    ) -> None:
         if advantage and disadvantage:
             raise DiceSyntaxError(
                 "Invalid syntax. Cannot have advantage and disadvantage in the same roll.\n"
@@ -105,7 +107,7 @@ class RollData:
 
 
 class RollParser(RollData):
-    def __init__(self, roll_string=None, **kwargs):
+    def __init__(self, roll_string: str = None, **kwargs) -> None:
         temp_roll_string = roll_string or "1d20"
         self.roll_string = temp_roll_string.lower().strip()
 
@@ -252,7 +254,7 @@ class RollParser(RollData):
 
         return main_roll
 
-    def parse_advantage_disadvantage(self) -> tuple:
+    def parse_advantage_disadvantage(self) -> int:
         """Parses out advantage and disadvantage"""
         advantage = re.findall(
             r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)", self.roll_string
@@ -262,8 +264,9 @@ class RollParser(RollData):
         )
 
         self.advantage_disadvantage_validation(advantage, disadvantage)
+        advantage_indx = 1 if any(advantage) else -1 if any(disadvantage) else 0
 
-        return (any(advantage), any(disadvantage))
+        return advantage_indx
 
     def parse_drop_lowest(self) -> int:
         keep_drop = re.findall(r"(kh|dl)\s*?(\d+)", self.roll_string)

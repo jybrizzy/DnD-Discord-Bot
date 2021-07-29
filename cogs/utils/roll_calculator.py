@@ -18,12 +18,12 @@ class RollResults:
 
 
 class RollCalculator:
-    def __init__(self, roll_string=None, **kwargs):
+    def __init__(self, roll_string: str = None, **kwargs) -> None:
         self.roll_string = roll_string or "1d20"
         self.roll_data = RollData(**kwargs) or RollParser(self.roll_string)
         self.results = RollResults()
 
-    def drop_lowest_index(self, dice_rolls):
+    def get_index_to_keep(self, dice_rolls: list) -> list:
         amount2drop = self.roll_data.rolls_to_drop
         indices2keep = sorted(
             range(len(dice_rolls)),
@@ -31,20 +31,21 @@ class RollCalculator:
         )[amount2drop:]
         return indices2keep
 
-    def roll_die(self, dice, sides):
-        if self.roll_data.advantages[0]:
-            accepted, rejected = RollMethods.advantage(dice, sides)
+    def get_dice_rolls(self, dice, sides):
+        roll_map = {
+            -1: RollMethods.disadvantage,
+            0: RollMethods.die_roller,
+            1: RollMethods.advantage,
+        }
 
-        elif self.roll_data.advantages[1]:
-            accepted, rejected = RollMethods.disadvantage(dice, sides)
-
-        else:
-            accepted = RollMethods.die_roller(dice, sides)
-            rejected = None
+        results = roll_map[self.advantages](dice, sides)
+        for acpt, *rjct in results:
+            accepted = acpt
+            rejected = rjct if rjct else None
 
         return accepted, rejected
 
-    def calculate_modifier_total(self):
+    def calculate_modifier_total(self) -> int:
         mod_values = []
         for modifier in self.roll_data.modifier:
             if isinstance(modifier, Roll):
@@ -54,19 +55,22 @@ class RollCalculator:
                 mod_values.append(modifier)
         return sum(mod_values)
 
-    def calculate_results(self):
+    def calculate_results(self) -> RollResults:
 
         die, sides = self.roll_data.main_roll.die, self.roll_data.main_roll.sides
         for _ in range(self.roll_data.multiplier):
-            accepted, rejected = self.roll_die(die, sides)
-            ind2k = self.drop_lowest_index(accepted)
+            accepted, rejected = self.get_dice_rolls(die, sides)
+            ind2k = self.get_index_to_keep(accepted)
             pretotal_item = [accepted[index] for index in ind2k]
             self.results.accepted_rolls.append(accepted)
             self.results.rejected_rolls.append(rejected)
             self.results.pretotal.append(sum(pretotal_item))
 
         mods = self.calculate_modifier_total()
-
         self.results.total = [pretot + mods for pretot in self.results.pretotal]
 
         return self.results
+
+
+class RollOutput:
+    pass
