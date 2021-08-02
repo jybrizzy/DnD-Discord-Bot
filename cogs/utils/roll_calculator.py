@@ -4,49 +4,17 @@ import re
 from random import randint
 from collections import namedtuple
 import sys
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 from cogs.utils.roll_parser import Roll, RollData, RollParser
 from cogs.utils.roll_methods import RollMethods
 
 
-@dataclass
 class RollResults:
-
-    accepted: list[int]
-    rejected: list[int] or list[None]
-    pretotal: int
-    total: int
-    stringifyed_roll: list[str]
-
-    def stringify_roll_list(self, roll_result: str, accpt_result: bool):
-        stringifyed_roll = [str(result) for result in roll_result]
-        if accpt_result:
-            self.accpt_str_roll = stringifyed_roll
-            self.accpt_str_roll = self.d20_formatter().drop_lowest_formatter()
-            return self.accpt_str_roll
-        else:
-            self.reject_str_roll = stringifyed_roll
-            return self.reject_str_roll
-
-    def d20_formatter(self):
-        if self.d20s:
-            ##Bold any 20's or 1's
-            self.accpt_str_roll = [
-                f"**{roll}**" if roll in ["20", "1"] else roll
-                for roll in self.accpt_str_roll
-            ]
-        return self.accpt_str_roll
-
-    def drop_lowest_formatter(self):
-        idx2keep = self.idx2keep
-        if idx2keep:
-            self.accpt_str_roll = [
-                f"~~{roll}~~" if idx not in idx2keep else roll
-                for idx, roll in enumerate(self.accpt_str_roll)
-            ]
-        return self.accpt_str_roll
+    def __init__(self):
+        self.accepted = list().copy()
+        self.rejected = list().copy()
+        self.pretotal = list().copy()
+        self.total = list().copy()
 
 
 class RollCalculator:
@@ -85,16 +53,6 @@ class RollCalculator:
         self.results.rejected_rolls = rejected_list
     """
 
-    def set_critical_value(self):
-        if self.roll_data.sides == 20:
-            accpt = self.results.accepted
-            critical_value = (
-                3 if 1 and 20 in accpt else 2 if 20 in accpt else 1 if 1 in accpt else 0
-            )
-        else:
-            critical_value = 0
-        return critical_value
-
     def set_pretotal(self) -> None:
         ind2k = self.set_index_to_keep(self.results.accepted)
         self.results.pretotal = sum([self.results.accepted[index] for index in ind2k])
@@ -115,71 +73,67 @@ class RollCalculator:
         self.results.total = self.results.pretotal + mods
 
 
-class StringifyRoll(ABC):
-    def configure_roll_string(self, str_result: str):
-        string_roll = ", ".join(str_result)
-        return string_roll
-
-
-
-
-class StringifyMultilplierRolls(StringifyRoll):
-    def configure_output(
-        self, result: RollResults, modifier: int, multiplier: int
-    ) -> str:
-        posted_text = "\n"
-        for iteration in range(multiplier):
-            accepted = super().configure_roll_string(result.accepted)
-            posted_text += f"Roll {iteration+1} : [ {accepted} ]\n"
-            if modifier:
-                posted_text += f"**Pretotal**: {result.pretotal}\n"
-            posted_text += f"**Total**: {result.total}\n"
-        return posted_text
-
-
-class StringifySingleRoll(StringifyRoll):
-    def configure_output(self, result: RollResults, modifier: int) -> str:
-        accepted = super().configure_roll_string(result.accepted)
-        posted_text = f": [ {accepted} ]\n"
-        if modifier:
-            posted_text += f"**Pretotal**: {result.pretotal}\n"
-        posted_text += f"**Total** : {result.total}\n"
-        return posted_text
-
-
-class RollOutput(ABC):
-    def __init__(
-        self, roll_string: str, roll_data: RollData, output_roll_str: StringifyRoll
-    ):
-        self.roll_string = roll_string
-        self.roll_data = roll_data  # RollData(**kwargs) or RollParser(self.roll_string)
-        self.output_roll_str = output_roll_str
+class RollOutput:
+    def __init__(self, roll_string: str = None, **kwargs):
+        self.roll_string = roll_string or "1d20"
+        self.roll_data = RollData(**kwargs) or RollParser(self.roll_string)
         self.rc = RollCalculator(self.roll_data)
-        self.crit_code = self.rc.set_critical_value()
+        self.results = self.rc.results
 
-        # self.results = self.rc.results
+    def initialize_results(self):
+        self.rc.set_dice_rolls()
+        self.rc.set_pretotal()
+        self.rc.set_total()
 
-    def calculate_results(self):
-
-    def main_roll_result(self, ctx):
+    def string_constructor(self, ctx):
         posted_text = (
             f"{ctx.author.mention} <:d20:849391713336426556>\n" f"{self.roll_string} "
         )
-        posted_text += self.output_roll.configure_roll_string()
+        for iteration, roll in enumerate(accepted):
+            if len(accepted) == 1:
+                posted_text += f": [ {roll} ]\n"
+                if self.roll_data.modifier:
+                    posted_text += f"**Pretotal**: {pretotal}\n"
 
-        if self.roll_data.advantages != 0:
-            posted_text += self.accepted_roll(rejects)
-        if self.crit_code != 0:
-            posted_text += self.d20_critical_roll
+                posted_text += f"**Total** : {total}\n"
+            else:
+                if iteration == 0:
+                    posted_text += "\n"
+                posted_text += f"Roll {iteration+1} : [ {accepted} ]\n"
+                if self.roll_data.modifier:
+                    posted_text += f"**Pretotal**: {pretotal}\n"
+                posted_text += f"**Total**: {total}\n"
+
+    def d20_condition_check(self):
+        d20s_condition = any(self.roll_data.main_roll.sides == 20)
+        accpt = self.results.accepted_rolls
+        if d20s_condition:
+            critical_value = (
+                3 if 1 and 20 in accpt else 2 if 20 in accpt else 1 if 1 in accpt else 0
+            )
+            crits_n_fails = re.compile(r"\b(20|1)\b")
+            string_results = crits_n_fails.sub(r"**\1**", string_results)
+        else:
+            critical_value = 0
+        return critical_value, string_results
 
     def accepted_roll(self, rejected_rolls):
-        rejects = self.output_roll.configure_roll_string(rejected_rolls)
+        string_rejects = ", ".join(str(roll) for roll in rejected_rolls)
         if self.roll_data.advantages == 1:
-            return f"Rolled with Advantage\n" f"_Rejected Rolls_ : [ {rejects} ]\n"
+            return (
+                f"Rolled with Advantage\n" f"_Rejected Rolls_ : [ {string_rejects} ]\n"
+            )
         if self.roll_data.advantages == -1:
-            return f"Rolled with Disadvantage\n" f"_Rejected Rolls_ : [ {rejects} ]\n"
+            return (
+                f"Rolled with Disadvantage\n"
+                f"_Rejected Rolls_ : [ {stringified_roll.rejected} ]\n"
+            )
 
-    def d20_critical_roll(self, crit_code):
+    def string_d20_condition(self, string_results):
+        crits_n_fails = re.compile(r"\b(20|1)\b")
+        string_results = crits_n_fails.sub(
+            r"**\1**", string_results
+        )  # bold critical values
         if crit_code == 3:
             return f"Wow! You got a Critical Success and a Critical Failure!\n"
         elif crit_code == 2:
@@ -187,4 +141,7 @@ class RollOutput(ABC):
         elif crit_code == 1:
             return f"**Critical Failure**! Await your fate!\n"
 
-
+    def drop_lowest_condition(self):
+        for index, value in enumerate(roll for roll in dice_rolls["accepted"]):
+            if index not in indices2keep:
+                string_dice_accepted[index] = f"~~{value}~~"
