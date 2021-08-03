@@ -1,0 +1,6 @@
+{
+    "token": "<token from Discord>",
+    "prefix": "!",
+    "sqlite_database": "<path to your db directory>",
+    "path_2_monster_images": "<path to monster images data>"
+}
