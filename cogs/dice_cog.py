@@ -17,6 +17,7 @@ class DiceCog(commands.Cog):
     @commands.command(name="roll", aliases=("r", "d20"))
     async def roll_cmd(self, ctx, *, die_string=None):
 
+        roll_data = RollParser(die_string)
         roll_results = RollCalculator(die_string)
         roll_string = roll_results.string_constructor(ctx)
 
@@ -68,8 +69,16 @@ class DiceCog(commands.Cog):
             "multiplier": 6,
             "rolls_to_drop": 3,
         }
-        roll_results = RollCalculator(roll_string="Ability Score Rolls", roll_data=roll)
-        roll_string = roll_results.string_constructor(ctx)
+
+        roll_data = RollData(roll)
+        rc = RollCalculator(roll_data)
+        roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
+        roll_results = RollOutput(
+            roll_data,
+            roll_results,
+            roll_string="Ability Score Rolls",
+        )
+        roll_string = roll_results.main_roll_result(ctx)
 
         await ctx.send(roll_string)
 

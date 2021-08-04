@@ -13,19 +13,29 @@ class RollResults:
     pretotal: int
     total: int
 
-
-class RollCalculator:
-    def __init__(self, roll_data) -> None:
-        self.roll_data = roll_data
-        self.results = RollResults()
-
-    def set_index_to_keep(self, dice_rolls: list[int]) -> list[int]:
-        amount2drop = self.roll_data.rolls_to_drop
+    def set_index_to_keep(self, rolls2drp, dice_rolls: list[int]) -> list[int]:
+        amount2drop = rolls2drp
         indices2keep = sorted(
             range(len(dice_rolls)),
             key=lambda x: dice_rolls[x],
         )[amount2drop:]
         return indices2keep
+
+    def set_critical_values(self, d20_condition: bool):
+        if d20_condition:
+            accpt = self.accepted
+            critical_value = (
+                3 if 1 and 20 in accpt else 2 if 20 in accpt else 1 if 1 in accpt else 0
+            )
+        else:
+            critical_value = 0
+        return critical_value
+
+
+class RollCalculator(RollResults):
+    def __init__(self, roll_data) -> None:
+        self.roll_data = roll_data
+        self.results = RollResults()
 
     def set_dice_rolls(self) -> tuple[list[int], list[int]]:
         roll_map = {
@@ -40,16 +50,6 @@ class RollCalculator:
         self.results.accepted = accepted
         self.results.rejected = rejected
         return self
-
-    def set_critical_value(self):
-        if self.roll_data.sides == 20:
-            accpt = self.results.accepted
-            critical_value = (
-                3 if 1 and 20 in accpt else 2 if 20 in accpt else 1 if 1 in accpt else 0
-            )
-        else:
-            critical_value = 0
-        return critical_value
 
     def set_pretotal(self) -> None:
         ind2k = self.set_index_to_keep(self.results.accepted)
@@ -135,14 +135,13 @@ class StringifyRejectedString(StringifyRoll):
 
 
 class RollOutput:
-    def __init__(self, roll_string: str, **kwargs):
-        self.roll_string = roll_string
-        self.data = RollData(**kwargs) or RollParser(self.roll_string)
+    def __init__(self, roll_data, results, roll_string: str):
+        self.data = roll_data
+        self.roll_string = roll_string or str(self.data)
+        self.results = results
         self.d20s = self.data.main_roll.sides == 20
-        self.rc = RollCalculator(self.data)
-        self.results = self.rc.set_dice_rolls().set_pretotal().set_total().results
-        self.idx2keep = self.rc.set_index_to_keep(self.results.accepted)
-        self.crit_code = self.rc.set_critical_value()
+        self.idx2keep = self.results.set_index_to_keep(self.results.accepted)
+        self.crit_code = self.results.set_critical_values(self.d20s)
 
     def main_roll_result(self, ctx):
         posted_text = (
