@@ -1,17 +1,16 @@
 from dataclasses import dataclass
 from collections.abc import Callable
 
-from .roll_parser import Roll, RollData, RollParser
-from .roll_methods import RollMethods
+from cogs.utils.roll_parser import Roll
+from cogs.utils.roll_methods import RollMethods
 
 
-@dataclass
 class RollResults:
-    def __init__(self) -> None:
-        accepted: list[int]
-        rejected: list[int] or list[None]
-        pretotal: int
-        total: int
+    def __init__(self, **kwargs):
+        self.accepted = kwargs["accepted"] or list().copy()
+        self.rejected = kwargs["rejected"] or list().copy()
+        self.pretotal = kwargs["pretotal"] or None
+        self.total = kwargs["total"] or None
 
     def set_index_to_keep(self, rolls2drp: int, dice_rolls: list[int]) -> list[int]:
         """Returns index ordered by roll result. Drops indices as prescribed by user."""
@@ -35,10 +34,10 @@ class RollResults:
 
 
 class RollCalculator(RollResults):
-    def __init__(self, roll_data) -> None:
-        # super().__init__(accepted, rejected, pretotal, total)
+    def __init__(self, roll_data, **kwargs) -> None:
+        super().__init__(**kwargs)
         self.roll_data = roll_data
-        self.results = RollResults()
+        # self.results = RollResults()
 
     def set_dice_rolls(self) -> tuple[list[int], list[int]]:
         roll_map = {
@@ -50,13 +49,13 @@ class RollCalculator(RollResults):
         die, sides = self.roll_data.main_roll.die, self.roll_data.main_roll.sides
         accepted, *rejected = roll_map[self.roll_data.advantages](die, sides)
         rejected = rejected[0] if rejected else None
-        self.results.accepted = accepted
-        self.results.rejected = rejected
+        self.accepted = accepted
+        self.rejected = rejected
         return self
 
     def set_pretotal(self) -> None:
-        ind2k = super().set_index_to_keep(self.results.accepted)
-        self.results.pretotal = sum([self.results.accepted[index] for index in ind2k])
+        ind2k = super().set_index_to_keep(self.roll_data.rolls_to_drop, self.accepted)
+        self.pretotal = sum([self.accepted[index] for index in ind2k])
         return self
 
     def set_modifier_total(self) -> int:
@@ -71,5 +70,5 @@ class RollCalculator(RollResults):
 
     def set_total(self) -> None:
         mods = self.set_modifier_total()
-        self.results.total = self.results.pretotal + mods
+        self.total = self.pretotal + mods
         return self

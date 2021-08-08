@@ -1,6 +1,7 @@
 import itertools
 import re
-from .errors import DiceSyntaxError
+from cogs.utils.errors import DiceSyntaxError
+from functools import wraps
 
 
 class Roll:
@@ -57,6 +58,7 @@ class RollData:
         self.advantages = kwargs["advantages"] or 0
         self.rolls_to_drop = kwargs["rolls_to_drop"] or 0
         self.warning = kwargs["warning"] or set()
+        self.syntax_error = None
 
     def __str__(self) -> str:
         """roll_string from RollData"""
@@ -106,11 +108,42 @@ class RollData:
             )
 
 
+def balanced_parenthesis(string2check: str) -> bool:
+    """Check for balanced parenthesis. Used for syntax check."""
+    pairs = {"(": ")"}
+    match_chk = []
+    for char in string2check:
+        if char == "(":
+            match_chk.append(char)
+        elif match_chk and char == pairs[match_chk[-1]]:
+            match_chk.pop()
+        elif char == ")":
+            return False
+        else:
+            continue
+    return len(match_chk) == 0
+
+
+def parse_parenthesis(default_val):
+    def _decorator(parse_mult):
+        @wraps(parse_mult)
+        def _wrapper(self):
+            if re.search(r"\((.*?)\)", self.roll_string):
+                return parse_mult(self)
+            elif not balanced_parenthesis(self.roll_string):
+                raise DiceSyntaxError("Incomplete parenthesis.\n")
+            else:
+                return default_val
+
+        return _wrapper
+
+    return _decorator
+
+
 class RollParser(RollData):
     def __init__(self, roll_string: str = None, **kwargs) -> None:
         temp_roll_string = roll_string or "1d20"
         self.roll_string = temp_roll_string.lower().strip()
-
         super().__init__(**kwargs)
         try:
             self.multiplier = kwargs["multiplier"] or self.parse_multiplier()
@@ -126,65 +159,44 @@ class RollParser(RollData):
         finally:
             self.syntax_error = syntax_error or ""
 
-    def balanced_parenthesis(self, string2check: str) -> bool:
-        """Check for balanced parenthesis. Used for syntax check."""
-        pairs = {"(": ")"}
-        match_chk = []
-        for char in string2check:
-            if char == "(":
-                match_chk.append(char)
-            elif match_chk and char == pairs[match_chk[-1]]:
-                match_chk.pop()
-            elif char == ")":
-                return False
-            else:
-                continue
-        return len(match_chk) == 0
-
+    @parse_parenthesis(default_val=1)
     def parse_multiplier(self) -> int:
         """Searches dice text for parenthesis and multiplier (e.g. 6*(4d6)). Returns multiplier modifies dice text to what is in parens."""
-        if re.search(r"\((.*?)\)", self.roll_string):
-            paren_check = re.findall(
-                r"(\d+)?\s*\*?\s*\((.*?)\)\s*\*?\s*(\d+)?",
-                self.roll_string,
+        paren_check = re.findall(
+            r"(\d+)?\s*\*?\s*\((.*?)\)\s*\*?\s*(\d+)?",
+            self.roll_string,
+        )
+        # index 0 is potential multiplier
+        # index 1 is content w/in parenthesis
+        # index 2 is potential multiplier
+
+        # Removes tuple inside list [(1,2,3)] -> [1,2,3]
+        paren_check = list(itertools.chain(*paren_check))
+        if not paren_check[1]:
+            raise DiceSyntaxError(
+                "Invalid format. Must include a dice roll to parse if including parenthesis.\n"
             )
-            # index 0 is potential multiplier
-            # index 1 is content w/in parenthesis
-            # index 2 is potential multiplier
-
-            # Removes tuple inside list [(1,2,3)] -> [1,2,3]
-            paren_check = list(itertools.chain(*paren_check))
-            if not paren_check[1]:
-                raise DiceSyntaxError(
-                    "Invalid format. Must include a dice roll to parse if including parentheses.\n"
-                )
-            else:
-                self.roll_string = paren_check[1].strip()
-
-            multiplier_list = paren_check[::2]
-            if not any(item for item in multiplier_list):
-                multiplier = 1
-            else:
-                try:
-                    parsed_multiplier = list(filter(None, multiplier_list))
-                    if len(parsed_multiplier) == 1:
-                        multiplier = int(parsed_multiplier[0])
-                    else:
-                        raise ValueError(
-                            f"Too many multipliers were parsed: {parsed_multiplier}"
-                        )
-                except ValueError as mult_err:
-                    raise DiceSyntaxError(
-                        "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
-                    ) from mult_err
-
-            return multiplier
-
-        elif not self.balanced_parenthesis(self.roll_string):
-            raise DiceSyntaxError("Incomplete parenthesis.\n")
-
         else:
-            return 1
+            self.roll_string = paren_check[1].strip()
+
+        multiplier_list = paren_check[::2]
+        if not any(item for item in multiplier_list):
+            multiplier = 1
+        else:
+            try:
+                parsed_multiplier = list(filter(None, multiplier_list))
+                if len(parsed_multiplier) == 1:
+                    multiplier = int(parsed_multiplier[0])
+                else:
+                    raise ValueError(
+                        f"Too many multipliers were parsed: {parsed_multiplier}"
+                    )
+            except ValueError as mult_err:
+                raise DiceSyntaxError(
+                    "Invalid multiplier formatting. Multiplier must be a single positive integer.\n"
+                ) from mult_err
+
+        return multiplier
 
     def parse_modifier(self) -> list:
         """Compiles list of modifiers. List components are ints or Roll instances."""
@@ -240,18 +252,17 @@ class RollParser(RollData):
         return modifiers
 
     def parse_base_roll(self) -> Roll:
-        main_die_list = re.findall(r"(\d*[d]\d+)", self.roll_string)
-        raw_die_numbers = [
-            tuple(map(int, die.split("d", 1))) for die in main_die_list
-        ]  # ->[('',6),(1, 20)]
-
-        die, sides = raw_die_numbers[0]
-        main_roll = Roll(die, sides)
-        warning = main_roll.max_roll_check()
-        if warning:
-            self.warning.update(warning)
-        main_roll.invalid_roll_check()
-
+        main_die = re.findall(r"(\d*[d]\d+)", self.roll_string)
+        if main_die:
+            raw_die_numbers = [tuple(map(int, die.split("d", 1))) for die in main_die]
+            die, sides = raw_die_numbers[0]
+            main_roll = Roll(die, sides)
+            warning = main_roll.max_roll_check()
+            if warning:
+                self.warning.update(warning)
+            main_roll.invalid_roll_check()
+        else:
+            main_roll = Roll(1, 20)
         return main_roll
 
     def parse_advantage_disadvantage(self) -> int:

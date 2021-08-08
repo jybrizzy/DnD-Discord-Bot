@@ -1,8 +1,9 @@
 import asyncio
 import discord
 from discord.ext import commands
-
-from cogs.utils.dice import RollCalculator
+from cogs.utils.roll_parser import Roll, RollData, RollParser
+from cogs.utils.roll_calculator import RollCalculator
+from cogs.utils.roll_output import RollOutput
 import sys
 
 print(sys.path)
@@ -14,12 +15,18 @@ class DiceCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="roll", aliases=("r", "d20"))
+    @commands.command(name="roll", aliases=("r", "d20", "1d20", "Roll", "ROLL"))
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_data = RollParser(die_string)
         roll_results = RollCalculator(die_string)
-        roll_string = roll_results.string_constructor(ctx)
+
+        roll_results = RollOutput(
+            roll_data,
+            roll_results,
+            roll_string=str(roll_data),
+        )
+        roll_string = roll_results.main_roll_result(ctx)
 
         msg = await ctx.send(roll_string)
 
