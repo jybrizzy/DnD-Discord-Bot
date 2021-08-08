@@ -1,7 +1,7 @@
 import asyncio
 import discord
 from discord.ext import commands
-from cogs.utils.roll_parser import Roll, RollData, RollParser
+from cogs.utils.roll_parser import Roll, RollParser
 from cogs.utils.roll_calculator import RollCalculator
 from cogs.utils.roll_output import RollOutput
 import sys
@@ -19,8 +19,8 @@ class DiceCog(commands.Cog):
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_data = RollParser(die_string)
-        roll_results = RollCalculator(die_string)
-
+        rc = RollCalculator(die_string)
+        roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
         roll_results = RollOutput(
             roll_data,
             roll_results,
@@ -55,7 +55,13 @@ class DiceCog(commands.Cog):
                 await msg.clear_reactions()
             else:
                 await msg.remove_reaction(reaction, user)
-                reroll = roll_results.string_constructor(ctx)
+                reroll_results = rc.set_dice_rolls().set_pretotal().set_total().results
+                reroll_results = RollOutput(
+                    roll_data,
+                    roll_results,
+                    roll_string=str(roll_data),
+                )
+                reroll = reroll_results.main_roll_result(ctx)
                 await ctx.send(reroll)
 
     @commands.command(
@@ -77,7 +83,7 @@ class DiceCog(commands.Cog):
             "rolls_to_drop": 3,
         }
 
-        roll_data = RollData(roll)
+        roll_data = RollParser(**roll)
         rc = RollCalculator(roll_data)
         roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
         roll_results = RollOutput(

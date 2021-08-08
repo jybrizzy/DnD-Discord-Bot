@@ -46,68 +46,6 @@ class Roll:
             )
 
 
-class RollData:
-
-    MAX_MULTIPLIER = 20
-    MAX_MODIFIER = 1000
-
-    def __init__(self, **kwargs) -> None:
-        self.multiplier = kwargs["multiplier"] or 1
-        self.modifier = kwargs["modifier"] or [0]
-        self.main_roll = kwargs["main_roll"] or Roll(1, 20)
-        self.advantages = kwargs["advantages"] or 0
-        self.rolls_to_drop = kwargs["rolls_to_drop"] or 0
-        self.warning = kwargs["warning"] or set()
-        self.syntax_error = None
-
-    def __str__(self) -> str:
-        """roll_string from RollData"""
-        new_roll_str = f""
-        new_roll_str += str(self.main_roll)
-        if any(self.modifier):
-            new_roll_str += f" "
-            for mod in self.modifier:
-                if isinstance(mod, Roll):
-                    new_roll_str += f"{str(mod)} "
-                elif isinstance(mod, int):
-                    sign = "+" if mod >= 0 else "-"
-                    new_roll_str += f"{sign} {abs(mod)} "
-        if self.advantages == 1:
-            new_roll_str += " advantage"
-        if self.advantages == -1:
-            new_roll_str += " disadvantage"
-        if self.rolls_to_drop > 0:
-            new_roll_str += f" kh{self.rolls_to_drop}"
-        if self.multiplier > 1:
-            new_roll_str = f"{self.multiplier} * ({new_roll_str})"
-
-        return new_roll_str
-
-    def max_multiplier_check(self) -> None:
-        if self.multiplier > self.MAX_MULTIPLIER:
-            multiplier = self.MAX_MULTIPLIER
-            self.warning.add(
-                f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
-                f"Using {multiplier} instead.\n"
-            )
-
-    def advantage_disadvantage_validation(
-        self, advantage: list, disadvantage: list
-    ) -> None:
-        if advantage and disadvantage:
-            raise DiceSyntaxError(
-                "Invalid syntax. Cannot have advantage and disadvantage in the same roll.\n"
-            )
-        if len(disadvantage) > len(self.main_roll):
-            raise DiceSyntaxError(
-                "Invalid syntax. You cannot have more disadvantages than you have rolls.\n"
-            )
-        if len(advantage) > len(self.main_roll):
-            raise DiceSyntaxError(
-                "Invalid syntax. You cannot have more advantages than you have rolls.\n"
-            )
-
-
 def balanced_parenthesis(string2check: str) -> bool:
     """Check for balanced parenthesis. Used for syntax check."""
     pairs = {"(": ")"}
@@ -140,24 +78,51 @@ def parse_parenthesis(default_val):
     return _decorator
 
 
-class RollParser(RollData):
+class RollParser:
+
+    MAX_MULTIPLIER = 20
+    MAX_MODIFIER = 1000
+
     def __init__(self, roll_string: str = None, **kwargs) -> None:
         temp_roll_string = roll_string or "1d20"
         self.roll_string = temp_roll_string.lower().strip()
-        super().__init__(**kwargs)
+        syntax_error = ""
         try:
-            self.multiplier = kwargs["multiplier"] or self.parse_multiplier()
-            self.modifier = kwargs["multiplier"] or self.parse_modifier()
-            self.main_roll = kwargs["main_roll"] or self.parse_base_roll()
-            self.advantages = (
-                kwargs["advantages"] or self.parse_advantage_disadvantage()
+            self.multiplier = kwargs.get("multiplier", self.parse_multiplier())
+            self.modifier = kwargs.get("modifier", self.parse_modifier())
+            self.main_roll = kwargs.get("main_roll", self.parse_base_roll())
+            self.advantages = kwargs.get(
+                "advantages", self.parse_advantage_disadvantage()
             )
-            self.rolls_to_drop = kwargs["rolls_to_drop"] or self.parse_drop_lowest()
-            self.warning = kwargs["warning"] or set()
+            self.rolls_to_drop = kwargs.get("rolls_to_drop", self.parse_drop_lowest())
+            self.warning = kwargs.get(["warning"], set())
         except DiceSyntaxError as die_err:
             syntax_error = str(die_err)
         finally:
-            self.syntax_error = syntax_error or ""
+            self.syntax_error = syntax_error
+
+    def __str__(self) -> str:
+        """roll string from roll data"""
+        new_roll_str = f""
+        new_roll_str += str(self.main_roll)
+        if any(self.modifier):
+            new_roll_str += f" "
+            for mod in self.modifier:
+                if isinstance(mod, Roll):
+                    new_roll_str += f"{str(mod)} "
+                elif isinstance(mod, int):
+                    sign = "+" if mod >= 0 else "-"
+                    new_roll_str += f"{sign} {abs(mod)} "
+        if self.advantages == 1:
+            new_roll_str += " advantage"
+        if self.advantages == -1:
+            new_roll_str += " disadvantage"
+        if self.rolls_to_drop > 0:
+            new_roll_str += f" kh{self.rolls_to_drop}"
+        if self.multiplier > 1:
+            new_roll_str = f"{self.multiplier} * ({new_roll_str})"
+
+        return new_roll_str
 
     @parse_parenthesis(default_val=1)
     def parse_multiplier(self) -> int:
@@ -297,6 +262,30 @@ class RollParser(RollData):
             parse_value = 0
 
         return parse_value
+
+    def max_multiplier_check(self) -> None:
+        if self.multiplier > self.MAX_MULTIPLIER:
+            multiplier = self.MAX_MULTIPLIER
+            self.warning.add(
+                f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
+                f"Using {multiplier} instead.\n"
+            )
+
+    def advantage_disadvantage_validation(
+        self, advantage: list, disadvantage: list
+    ) -> None:
+        if advantage and disadvantage:
+            raise DiceSyntaxError(
+                "Invalid syntax. Cannot have advantage and disadvantage in the same roll.\n"
+            )
+        if len(disadvantage) > len(self.main_roll):
+            raise DiceSyntaxError(
+                "Invalid syntax. You cannot have more disadvantages than you have rolls.\n"
+            )
+        if len(advantage) > len(self.main_roll):
+            raise DiceSyntaxError(
+                "Invalid syntax. You cannot have more advantages than you have rolls.\n"
+            )
 
 
 # print(RollParser("1d20").__dict__)  # parse_multiplier()

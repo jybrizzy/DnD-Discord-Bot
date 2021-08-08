@@ -35,7 +35,7 @@ async def unload_cogs(ctx, extension):
 
 if __name__ == "__main__":
     for filename in os.listdir("./cogs"):
-        if filename.endswith(".py"):
+        if filename.endswith(".py") and not filename.startswith("__"):
             bot.load_extension(f"cogs.{filename[:-3]}")
 
     bot.run(config["token"])
