@@ -7,10 +7,10 @@ from cogs.utils.roll_methods import RollMethods
 
 class RollResults:
     def __init__(self, **kwargs):
-        self.accepted = kwargs["accepted"] or list().copy()
-        self.rejected = kwargs["rejected"] or list().copy()
-        self.pretotal = kwargs["pretotal"] or None
-        self.total = kwargs["total"] or None
+        self.accepted = kwargs.get("accepted", list().copy())
+        self.rejected = kwargs.get("rejected", list().copy())
+        self.pretotal = kwargs.get("pretotal", None)
+        self.total = kwargs.get("total", None)
 
     def set_index_to_keep(self, rolls2drp: int, dice_rolls: list[int]) -> list[int]:
         """Returns index ordered by roll result. Drops indices as prescribed by user."""
@@ -46,10 +46,14 @@ class RollCalculator:
         }
 
         die, sides = self.roll_data.main_roll.die, self.roll_data.main_roll.sides
-        accepted, *rejected = roll_map[self.roll_data.advantages](die, sides)
-        rejected = rejected[0] if rejected else None
-        self.results.accepted = accepted
-        self.results.rejected = rejected
+        results = roll_map[self.roll_data.advantages](die, sides)
+        if any(isinstance(rest, list) for rest in results):
+            self.results.accepted, *rejected = results
+            self.results.rejected = rejected[0]
+        else:
+            self.results.accepted = results
+            self.results.rejected = None
+
         return self
 
     def set_pretotal(self) -> None:

@@ -19,12 +19,11 @@ class DiceCog(commands.Cog):
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_data = RollParser(die_string)
-        rc = RollCalculator(die_string)
+        rc = RollCalculator(roll_data)
         roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
         roll_results = RollOutput(
             roll_data,
             roll_results,
-            roll_string=str(roll_data),
         )
         roll_string = roll_results.main_roll_result(ctx)
 

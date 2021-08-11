@@ -8,11 +8,11 @@ class StringifyRoll(ABC):
         self.idx2keep = idx2keep
 
     def configure_roll_string(self, str_result: str, accpt_bool: bool):
-        str_roll = [str(result) for result in str_result]
+        str_roll_lst = [str(result) for result in str_result]
         if accpt_bool:
-            str_roll = self.d20_formatter(str_roll)
-            str_roll = self.drop_lowest_formatter(str_roll)
-        str_roll = ", ".join(str_result)
+            str_roll_lst = self.d20_formatter(str_roll_lst)
+            str_roll_lst = self.drop_lowest_formatter(str_roll_lst)
+        str_roll = ", ".join(str_roll_lst)
         return str_roll
 
     def d20_formatter(self, str_roll):
@@ -65,13 +65,15 @@ class StringifyRejectedString(StringifyRoll):
 
 
 class RollOutput:
-    def __init__(self, roll_data, results, roll_string: str):
+    def __init__(self, roll_data, results, roll_string: str = None):
         self.data = roll_data
         self.roll_string = roll_string or str(self.data)
         self.results = results
         try:
             self.d20s = self.data.main_roll.sides == 20
-            self.idx2keep = self.results.set_index_to_keep(self.results.accepted)
+            self.idx2keep = self.results.set_index_to_keep(
+                self.data.rolls_to_drop, self.results.accepted
+            )
             self.crit_code = self.results.set_critical_values(self.d20s)
         except AttributeError as att_err:
             print(f"Attributes not recognized: {att_err}")
@@ -85,7 +87,7 @@ class RollOutput:
                 f"{self.roll_string} "
             )
 
-            if self.data.modifier > 1:
+            if len(self.data.modifier) > 1:
                 str_inst = StringifyMultilplierRolls(self.d20s, self.idx2keep)
                 posted_text += str_inst.configure_output(self.results, self.data)
             else:

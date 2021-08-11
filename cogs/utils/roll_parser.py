@@ -20,15 +20,20 @@ class Roll:
             die_str = f"{self.sign.strip()} {die_str}"
         return die_str
 
+    def __len__(self) -> int:
+        return 1
+
     def max_roll_check(self) -> set:
         if self.die > self.MAX_DICE:
             self.die = self.MAX_DICE
-            self.warning.add(f"Maximum number of die, {self.MAX_DICE}, exceeded.\n")
+            self.warning.update(f"Maximum number of die, {self.MAX_DICE}, exceeded.\n")
         if self.sides > self.MAX_SIDES:
             self.sides = self.MAX_SIDES
-            self.warning.add(f"Maximum number of sides, {self.MAX_SIDES}, exceeded.\n")
+            self.warning.update(
+                f"Maximum number of sides, {self.MAX_SIDES}, exceeded.\n"
+            )
         if self.warning:
-            self.warning.add(f"Rolling {self.die}d{self.sides} instead.\n")
+            self.warning.update(f"Rolling {self.die}d{self.sides} instead.\n")
         return self.warning
 
     def invalid_roll_check(self) -> None:
@@ -95,7 +100,7 @@ class RollParser:
                 "advantages", self.parse_advantage_disadvantage()
             )
             self.rolls_to_drop = kwargs.get("rolls_to_drop", self.parse_drop_lowest())
-            self.warning = kwargs.get(["warning"], set())
+            self.warning = set()
         except DiceSyntaxError as die_err:
             syntax_error = str(die_err)
         finally:
@@ -266,7 +271,7 @@ class RollParser:
     def max_multiplier_check(self) -> None:
         if self.multiplier > self.MAX_MULTIPLIER:
             multiplier = self.MAX_MULTIPLIER
-            self.warning.add(
+            self.warning.update(
                 f"Maximum number of multipliers, {self.MAX_MULTIPLIER}, exceeded.\n"
                 f"Using {multiplier} instead.\n"
             )
