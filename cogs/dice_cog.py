@@ -6,8 +6,6 @@ from cogs.utils.roll_calculator import RollCalculator
 from cogs.utils.roll_output import RollOutput
 import sys
 
-print(sys.path)
-
 
 class DiceCog(commands.Cog):
     """Dice related commands"""
@@ -21,11 +19,11 @@ class DiceCog(commands.Cog):
         roll_data = RollParser(die_string)
         rc = RollCalculator(roll_data)
         roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
-        roll_results = RollOutput(
+        roll_output = RollOutput(
             roll_data,
             roll_results,
         )
-        roll_string = roll_results.main_roll_result(ctx)
+        roll_string = roll_output.main_roll_result(ctx)
 
         msg = await ctx.send(roll_string)
 
@@ -55,13 +53,12 @@ class DiceCog(commands.Cog):
             else:
                 await msg.remove_reaction(reaction, user)
                 reroll_results = rc.set_dice_rolls().set_pretotal().set_total().results
-                reroll_results = RollOutput(
+                reroll_output = RollOutput(
                     roll_data,
-                    roll_results,
-                    roll_string=str(roll_data),
+                    reroll_results,
                 )
-                reroll = reroll_results.main_roll_result(ctx)
-                await ctx.send(reroll)
+                reroll_str = reroll_output.main_roll_result(ctx)
+                await ctx.send(reroll_str)
 
     @commands.command(
         name="RollAbilities",

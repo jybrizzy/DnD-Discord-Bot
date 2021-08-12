@@ -1,17 +1,12 @@
 import random
 import unittest
-
-import sys
 from functools import wraps
 
-# sys.path.append("C:\\Users\\jbrizzy\\Desktop\\Discord_Bot")
-# print(sys.path)
-from cogs.utils.roll_parser import RollParser
+from cogs.utils.roll_parser import Roll, RollParser
 from unittest.mock import patch
 
-unittest.TestLoader.sortTestMethodsUsing = None
 # component testing
-
+unittest.TestLoader.sortTestMethodsUsing = None
 
 DIE_EXPRESSIONS = [
     "1d20",
@@ -95,7 +90,7 @@ class TestRollParser(unittest.TestCase):
         for (statement, expected_value) in PARENTHESIS_EXPRESSIONS:
             with self.subTest(paren_string=statement):
                 self.assertEqual(
-                    RollParser().balanced_parenthesis(statement), expected_value
+                    RollParser.balanced_parenthesis(statement), expected_value
                 )
 
     MULTIPLIER_TEST_LIST = [
@@ -137,25 +132,25 @@ class TestRollParser(unittest.TestCase):
 
     # fmt: off
     MODIFIER_TEST_LIST = [
-        ([0], [""], "1d20"),
-        ([0], [""], "d20"),
-        ([0], [""], "&d20"),
-        ([4], ["+ 4 "], "2d20 + 4"),
-        ([1, 6], ["+ 1d6 "], "1d20"),
-        ([1, 1], ["+ 1 ", "+ 1d4 "], "1d20"),
-        ([0], [""], "1d4"),
-        ([0], [""], "4d6"),
-        ([0], [""], "4d6"),
-        ([0], [""], "1d20"),
-        ([0], [""], "1d6"),
-        ([0], [""], "10d10"),
-        ([0], [""], "6 * 1d20"),
-        ([0], [""], "1d20 advantage"),
-        ([0], [""], "1d20 disadvantage"),
-        ([0], [""], "advantage 4d20"),
+        ([0], "1d20"),
+        ([0], "d20"),
+        ([0], "&d20"),
+        ([4], "2d20 + 4"),
+        ([repr(Roll(1,6,'+'))], "1d20"),
+        ([1, repr(Roll(1,6,'+'))], ["+ 1 ", "+ 1d4 "], "1d20"),
+        ([0], "1d4"),
+        ([0], "4d6"),
+        ([0], "4d6"),
+        ([0], "1d20"),
+        ([0], "1d6"),
+        ([0], "10d10"),
+        ([0], "6 * 1d20"),
+        ([0], "1d20 advantage"),
+        ([0], "1d20 disadvantage"),
+        ([0], "advantage 4d20"),
         ([5, 1, 2], ["+ 5 ", "+ 1 ", "+ 2 "], "1d20 advantage"),
-        ([0], [""], "4d6 dl 1"),
-        ([0], [""], "4d6 adv kh3"),
+        ([0], "4d6 dl 1"),
+        ([0], "4d6 adv kh3"),
         ([1], ["+ 1d4 "], "1d10 dis"),
         ([2], ["+ 2 "], "14d20 disadvantage dl 6"),
         ([3, 1, 2], ["+ 3 ", "+ 1d4 ", "+ 2 "], "2d12 advan dl 1"),
@@ -179,14 +174,14 @@ class TestRollParser(unittest.TestCase):
         self.assertIsInstance(roll_exp.roll_string, str)
 
     BASE_ROLL_TEST_LIST = [
-        ([{"dice": 1, "sides": 20}], "1d20"),
-        ([{"dice": 1, "sides": 20}], "d20"),
-        ([{"dice": 1, "sides": 20}], "&d20"),
-        ([{"dice": 2, "sides": 20}], "2d20"),
-        ([{"dice": 1, "sides": 20}], "1d20 "),
-        ([{"dice": 1, "sides": 20}], "1d20 "),
-        ([{"dice": 1, "sides": 4}], "1d4"),
-        ([{"dice": 4, "sides": 6}], "4d6"),
+        (repr(Roll(1, 20)), "1d20"),
+        (repr(Roll(1, 20)), "d20"),
+        (repr(Roll(1, 20)), "&d20"),
+        (repr(Roll(2, 20)), "2d20"),
+        (repr(Roll(1, 20)), "1d20 "),
+        (repr(Roll(1, 20)), "1d20 "),
+        (repr(Roll(1, 4)), "1d4"),
+        (repr(Roll(4, 6)), "4d6"),
         ([{"dice": 4, "sides": 6}], "4d6"),
         ([{"dice": 1, "sides": 20}], "1d20"),
         ([{"dice": 1, "sides": 6}], "1d6"),
@@ -214,28 +209,28 @@ class TestRollParser(unittest.TestCase):
         self.assertCountEqual(base_roll_list, expected_roll)
 
     ADVANTAGE_DISADVANTAGE_TEST_LIST = [
-        (False, False, "1d20"),
-        (False, False, "d20"),
-        (False, False, "&d20"),
-        (False, False, "2d20 + 4"),
-        (False, False, "1d20 "),
-        (False, False, "1d20 "),
-        (False, False, "1d4"),
-        (False, False, "4d6"),
-        (False, False, "4d6"),
-        (False, False, "1d20"),
-        (False, False, "1d6"),
-        (False, False, "10d10"),
-        (False, False, "6 * 1d20"),
-        (True, False, "1d20 advantage"),
-        (False, True, "1d20 disadvantage"),
-        (True, False, "advantage 4d20"),
-        (True, False, "1d20 advantage"),
-        (False, False, "4d6 dl 1"),
-        (True, False, "4d6 adv kh3"),
-        (False, True, "1d10 dis"),
-        (False, True, "14d20 disadvantage dl 6"),
-        (False, True, "2d12 advan dl 1"),
+        (0, "1d20"),
+        (0, "d20"),
+        (0, "&d20"),
+        (0, "2d20 + 4"),
+        (0, "1d20 "),
+        (0, "1d20 "),
+        (0, "1d4"),
+        (0, "4d6"),
+        (0, "4d6"),
+        (0, "1d20"),
+        (0, "1d6"),
+        (0, "10d10"),
+        (0, "6 * 1d20"),
+        (1, "1d20 advantage"),
+        (-1, "1d20 disadvantage"),
+        (1, "advantage 4d20"),
+        (1, "1d20 advantage"),
+        (0, "4d6 dl 1"),
+        (1, "4d6 adv kh3"),
+        (-1, "1d10 dis"),
+        (-1, "14d20 disadvantage dl 6"),
+        (-1, "2d12 advan dl 1"),
     ]
 
     ADVANTAGE_DISADVANTAGE_TEST_ITER = iter(ADVANTAGE_DISADVANTAGE_TEST_LIST)

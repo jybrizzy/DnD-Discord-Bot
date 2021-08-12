@@ -20,6 +20,12 @@ class Roll:
             die_str = f"{self.sign.strip()} {die_str}"
         return die_str
 
+    def __repr__(self) -> str:
+        if self.sign:
+            return f"Roll({self.die}, {self.sides}, '{self.sign}')"
+        else:
+            return f"Roll({self.die}, {self.sides})"
+
     def __len__(self) -> int:
         return 1
 

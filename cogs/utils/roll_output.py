@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from .roll_calculator import RollResults
+from cogs.utils.roll_calculator import RollResults
 
 
 class StringifyRoll(ABC):
@@ -42,7 +42,7 @@ class StringifyMultilplierRolls(StringifyRoll):
         for iteration in range(data.multiplier):
             accepted = super().configure_roll_string(result.accepted, accpt_bool=True)
             posted_text += f"Roll {iteration+1} : [ {accepted} ]\n"
-            if data.modifier:
+            if len(data.modifier) > 1:
                 posted_text += f"**Pretotal**: {result.pretotal}\n"
             posted_text += f"**Total**: {result.total}\n"
         return posted_text
@@ -52,7 +52,7 @@ class StringifySingleRoll(StringifyRoll):
     def configure_output(self, result: RollResults, data) -> str:
         accepted = super().configure_roll_string(result.accepted, accpt_bool=True)
         posted_text = f": [ {accepted} ]\n"
-        if data.modifier:
+        if len(data.modifier) > 1:
             posted_text += f"**Pretotal**: {result.pretotal}\n"
         posted_text += f"**Total** : {result.total}\n"
         return posted_text
@@ -98,6 +98,8 @@ class RollOutput:
                 posted_text += self.stringify_advantages(self.results)
             if self.crit_code != 0:
                 posted_text += RollOutput.d20_critical_roll(self.crit_code)
+
+            return posted_text
 
     def stringify_advantages(self, results):
         rejected = StringifyRejectedString().configure_output(results)
