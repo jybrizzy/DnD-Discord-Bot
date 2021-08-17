@@ -87,7 +87,7 @@ class RollOutput:
                 f"{self.roll_string} "
             )
 
-            if len(self.data.modifier) > 1:
+            if self.data.multiplier > 1:
                 str_inst = StringifyMultilplierRolls(self.d20s, self.idx2keep)
                 posted_text += str_inst.configure_output(self.results, self.data)
             else:

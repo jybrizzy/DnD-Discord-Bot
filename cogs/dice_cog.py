@@ -4,7 +4,14 @@ from discord.ext import commands
 from cogs.utils.roll_parser import Roll, RollParser
 from cogs.utils.roll_calculator import RollCalculator
 from cogs.utils.roll_output import RollOutput
-import sys
+
+
+def roll_calculations(roll_calc, multipliers):
+    result_list = []
+    for _ in range(multipliers):
+        roll_result = roll_calc.set_dice_rolls().set_pretotal().set_total().results
+        result_list.append(roll_result)
+    return result_list
 
 
 class DiceCog(commands.Cog):
@@ -18,7 +25,7 @@ class DiceCog(commands.Cog):
 
         roll_data = RollParser(die_string)
         rc = RollCalculator(roll_data)
-        roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
+        roll_results = roll_calculations(rc, roll_data.multiplier)
         roll_output = RollOutput(
             roll_data,
             roll_results,
@@ -52,7 +59,7 @@ class DiceCog(commands.Cog):
                 await msg.clear_reactions()
             else:
                 await msg.remove_reaction(reaction, user)
-                reroll_results = rc.set_dice_rolls().set_pretotal().set_total().results
+                reroll_results = roll_calculations(rc, roll_data.multiplier)
                 reroll_output = RollOutput(
                     roll_data,
                     reroll_results,
@@ -68,6 +75,7 @@ class DiceCog(commands.Cog):
             "Roll_Abilities",
             "ra",
             "rollStats",
+            "RollStats",
             "roll_stats",
         ),
     )
@@ -76,12 +84,12 @@ class DiceCog(commands.Cog):
         roll = {
             "main_roll": Roll(4, 6),
             "multiplier": 6,
-            "rolls_to_drop": 3,
+            "rolls_to_drop": 1,
         }
 
         roll_data = RollParser(**roll)
         rc = RollCalculator(roll_data)
-        roll_results = rc.set_dice_rolls().set_pretotal().set_total().results
+        roll_results = roll_calculations(rc, roll_data.multiplier)
         roll_results = RollOutput(
             roll_data,
             roll_results,
