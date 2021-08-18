@@ -130,9 +130,7 @@ class RollParser:
             self.multiplier = kwargs.get("multiplier", self.parse_multiplier())
             self.modifier = kwargs.get("modifier", self.parse_modifier())
             self.main_roll = kwargs.get("main_roll", self.parse_base_roll())
-            self.advantages = kwargs.get(
-                "advantages", self.parse_advantage_disadvantage()
-            )
+            self.advantages = kwargs.get("advantages", self.parse_advantages())
             self.rolls_to_drop = kwargs.get("rolls_to_drop", self.parse_drop_lowest())
             self.warning = set()
         except DiceSyntaxError as die_err:
@@ -279,7 +277,7 @@ class RollParser:
             main_roll = Roll(1, 20)
         return main_roll
 
-    def parse_advantage_disadvantage(self) -> int:
+    def parse_advantages(self) -> int:
         """Parses out advantage and disadvantage"""
         advantage = re.findall(
             r"(?<!dis)(?:\b|\d)(advantage|advan|adv|ad|a)", self.roll_string

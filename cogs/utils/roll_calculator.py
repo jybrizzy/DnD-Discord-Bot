@@ -12,26 +12,6 @@ class RollResults:
         self.pretotal = kwargs.get("pretotal", None)
         self.total = kwargs.get("total", None)
 
-    def set_index_to_keep(self, rolls2drp: int, dice_rolls: list[int]) -> list[int]:
-        """Returns index ordered by roll result. Drops indices as prescribed by user."""
-        amount2drop = rolls2drp  # self.roll_data.rolls_to_drop
-        indices2keep = sorted(
-            range(len(dice_rolls)),
-            key=lambda x: dice_rolls[x],
-        )[amount2drop:]
-        return indices2keep
-
-    def set_critical_values(self, d20_condition: bool) -> int:
-        """Returns a mapping 0, 1, 2, or 3. Identifys 1's or 20's in d20 rolls."""
-        if d20_condition:
-            accpt = self.accepted
-            critical_value = (
-                3 if 1 and 20 in accpt else 2 if 20 in accpt else 1 if 1 in accpt else 0
-            )
-        else:
-            critical_value = 0
-        return critical_value
-
 
 class RollCalculator:
     def __init__(self, roll_data) -> None:
@@ -56,8 +36,18 @@ class RollCalculator:
 
         return self
 
+    @staticmethod
+    def set_index_to_keep(rolls2drp: int, dice_rolls: list[int]) -> list[int]:
+        """Returns index ordered by roll result. Drops indices as prescribed by user."""
+        amount2drop = rolls2drp  # self.roll_data.rolls_to_drop
+        indices2keep = sorted(
+            range(len(dice_rolls)),
+            key=lambda x: dice_rolls[x],
+        )[amount2drop:]
+        return indices2keep
+
     def set_pretotal(self) -> None:
-        ind2k = self.results.set_index_to_keep(
+        ind2k = RollCalculator.set_index_to_keep(
             self.roll_data.rolls_to_drop, self.results.accepted
         )
         self.results.pretotal = sum([self.results.accepted[index] for index in ind2k])

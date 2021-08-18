@@ -14,6 +14,26 @@ def roll_calculations(roll_calc, multipliers):
     return result_list
 
 
+class RollResultIter:
+    def __init__(self, multiplier, roll_calc):
+        self.multiplier = multiplier
+        self.roll_calc = roll_calc
+
+    def __iter__(self):
+        self.count = 0
+        return self
+
+    def __next__(self):
+        if self.multiplier > self.count:
+            self.count += 1
+            roll_result = (
+                self.roll_calc.set_dice_rolls().set_pretotal().set_total().results
+            )
+            return roll_result
+        else:
+            raise StopIteration
+
+
 class DiceCog(commands.Cog):
     """Dice related commands"""
 

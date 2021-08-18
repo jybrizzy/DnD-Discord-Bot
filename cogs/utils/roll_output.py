@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from cogs.utils.roll_calculator import RollResults
+from cogs.utils.roll_calculator import RollCalculator, RollResults
 
 
 class StringifyRoll(ABC):
-    def __init__(self, d20s=None, idx2keep=None):
+    def __init__(self, d20s, rlls2drp):
         self.d20s = d20s
-        self.idx2keep = idx2keep
+        self.rlls2drp = rlls2drp
 
-    def configure_roll_string(self, str_result: str, accpt_bool: bool):
+    def configure_roll_string(self, str_result: str, accpt_bool: bool = True):
         str_roll_lst = [str(result) for result in str_result]
         if accpt_bool:
             str_roll_lst = self.d20_formatter(str_roll_lst)
@@ -23,10 +23,11 @@ class StringifyRoll(ABC):
             ]
         return str_roll
 
-    def drop_lowest_formatter(self, str_roll):
-        if self.idx2keep:
+    def drop_lowest_formatter(self, str_roll, accepted_results):
+        if self.rlls2drp > 0:
+            idx2keep = RollCalculator.set_index_to_keep(self.rlls2drp, accepted_results)
             str_roll = [
-                f"~~{roll}~~" if idx not in self.idx2keep else roll
+                f"~~{roll}~~" if idx not in idx2keep else roll
                 for idx, roll in enumerate(str_roll)
             ]
         return str_roll
@@ -40,17 +41,18 @@ class StringifyMultilplierRolls(StringifyRoll):
     def configure_output(self, result: RollResults, data) -> str:
         posted_text = "\n"
         for iteration in range(data.multiplier):
-            accepted = super().configure_roll_string(result.accepted, accpt_bool=True)
+            rslt = next(result)
+            accepted = super().configure_roll_string(rslt.accepted)
             posted_text += f"Roll {iteration+1} : [ {accepted} ]\n"
             if len(data.modifier) > 1:
-                posted_text += f"**Pretotal**: {result.pretotal}\n"
-            posted_text += f"**Total**: {result.total}\n"
+                posted_text += f"**Pretotal**: {rslt.pretotal}\n"
+            posted_text += f"**Total**: {rslt.total}\n"
         return posted_text
 
 
 class StringifySingleRoll(StringifyRoll):
     def configure_output(self, result: RollResults, data) -> str:
-        accepted = super().configure_roll_string(result.accepted, accpt_bool=True)
+        accepted = super().configure_roll_string(result.accepted)
         posted_text = f": [ {accepted} ]\n"
         if len(data.modifier) > 1:
             posted_text += f"**Pretotal**: {result.pretotal}\n"
@@ -71,9 +73,7 @@ class RollOutput:
         self.results = results
         try:
             self.d20s = self.data.main_roll.sides == 20
-            self.idx2keep = self.results.set_index_to_keep(
-                self.data.rolls_to_drop, self.results.accepted
-            )
+            self.rlls2drp = self.data.rolls_to_drop
             self.crit_code = self.results.set_critical_values(self.d20s)
         except AttributeError as att_err:
             print(f"Attributes not recognized: {att_err}")
@@ -88,13 +88,14 @@ class RollOutput:
             )
 
             if self.data.multiplier > 1:
-                str_inst = StringifyMultilplierRolls(self.d20s, self.idx2keep)
+                str_inst = StringifyMultilplierRolls(self.d20s, self.rlls2drp)
                 posted_text += str_inst.configure_output(self.results, self.data)
             else:
-                str_inst = StringifySingleRoll(self.d20s, self.idx2keep)
+                str_inst = StringifySingleRoll(self.d20s, self.rlls2drp)
                 posted_text += str_inst.configure_output(self.results, self.data)
 
             if self.data.advantages != 0:
+                # Need to remedy the results being called again here
                 posted_text += self.stringify_advantages(self.results)
             if self.crit_code != 0:
                 posted_text += RollOutput.d20_critical_roll(self.crit_code)
