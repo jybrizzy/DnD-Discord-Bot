@@ -3,15 +3,19 @@ from cogs.utils.roll_calculator import RollCalculator, RollResults
 
 
 class StringifyRoll(ABC):
-    def __init__(self, d20s, rlls2drp):
-        self.d20s = d20s
-        self.rlls2drp = rlls2drp
+    def __init__(self, data):
+        self.data = data
+        try:
+            self.d20s = self.data.main_roll.sides == 20
+            self.rlls2drp = self.data.rolls_to_drop
+        except AttributeError as att_err:
+            print(f"Attributes not recognized: {att_err}")
 
     def configure_roll_string(self, str_result: str, accpt_bool: bool = True):
         str_roll_lst = [str(result) for result in str_result]
         if accpt_bool:
             str_roll_lst = self.d20_formatter(str_roll_lst)
-            str_roll_lst = self.drop_lowest_formatter(str_roll_lst)
+            str_roll_lst = self.drop_lowest_formatter(str_roll_lst)  # Need to fix
         str_roll = ", ".join(str_roll_lst)
         return str_roll
 
@@ -20,7 +24,7 @@ class StringifyRoll(ABC):
             ##Bold any 20's or 1's
             str_roll = [
                 f"**{roll}**" if roll in ["20", "1"] else roll for roll in str_roll
-            ]
+            ]  # check if it highlights 10.
         return str_roll
 
     def drop_lowest_formatter(self, str_roll, accepted_results):
@@ -36,34 +40,68 @@ class StringifyRoll(ABC):
     def configure_output(self, result: RollResults) -> str:
         pass
 
+    def stringify_advantages(self, rejected_result):
+        rejected = self.configure_roll_string(rejected_result, accpt_bool=False)
+        if self.data.advantages == 1:
+            return f"Rolled with Advantage\n" f"_Rejected Rolls_ : [ {rejected} ]\n"
+        if self.data.advantages == -1:
+            return f"Rolled with Disadvantage\n" f"_Rejected Rolls_ : [ {rejected} ]\n"
+
+    def stringify_d20_crit_roll(self, accpted):
+        crit_code_map = {
+            3: "Wow! You got a Critical Success and a Critical Failure!\n",
+            2: "**Critical Success**! Roll again!\n",
+            1: "**Critical Failure**! Await your fate!\n",
+            0: "",
+        }
+
+        if self.d20s:
+            critical_value = (
+                3
+                if 1 and 20 in accpted
+                else 2
+                if 20 in accpted
+                else 1
+                if 1 in accpted
+                else 0
+            )
+            return crit_code_map[critical_value]
+        else:
+            return crit_code_map[0]
+
 
 class StringifyMultilplierRolls(StringifyRoll):
     def configure_output(self, result: RollResults, data) -> str:
         posted_text = "\n"
         for iteration in range(data.multiplier):
-            rslt = next(result)
+            rslt = next(result)  # Need to fix
             accepted = super().configure_roll_string(rslt.accepted)
             posted_text += f"Roll {iteration+1} : [ {accepted} ]\n"
             if len(data.modifier) > 1:
                 posted_text += f"**Pretotal**: {rslt.pretotal}\n"
             posted_text += f"**Total**: {rslt.total}\n"
+            if data.advantages != 0:
+                posted_text += super().stringify_advantages(rslt.rejected)
+            posted_text += super().stringify_d20_crit_roll(rslt.accepted)
         return posted_text
 
 
 class StringifySingleRoll(StringifyRoll):
     def configure_output(self, result: RollResults, data) -> str:
-        accepted = super().configure_roll_string(result.accepted)
+        # Need to fix
+        rslt = next(result)
+        accepted = super().configure_roll_string(rslt.accepted)
         posted_text = f": [ {accepted} ]\n"
         if len(data.modifier) > 1:
-            posted_text += f"**Pretotal**: {result.pretotal}\n"
-        posted_text += f"**Total** : {result.total}\n"
+            posted_text += f"**Pretotal**: {rslt.pretotal}\n"
+        posted_text += f"**Total** : {rslt.total}\n"
         return posted_text
 
 
-class StringifyRejectedString(StringifyRoll):
-    def configure_output(self, result: RollResults) -> str:
-        rejected = super().configure_roll_string(result.rejected, accpt_bool=False)
-        return rejected
+# class StringifyRejectedString(StringifyRoll):
+#     def configure_output(self, result: RollResults) -> str:
+#         rejected = super()
+#         return rejected
 
 
 class RollOutput:
@@ -71,12 +109,6 @@ class RollOutput:
         self.data = roll_data
         self.roll_string = roll_string or str(self.data)
         self.results = results
-        try:
-            self.d20s = self.data.main_roll.sides == 20
-            self.rlls2drp = self.data.rolls_to_drop
-            self.crit_code = self.results.set_critical_values(self.d20s)
-        except AttributeError as att_err:
-            print(f"Attributes not recognized: {att_err}")
 
     def main_roll_result(self, ctx):
         if self.data.syntax_error:
@@ -88,32 +120,10 @@ class RollOutput:
             )
 
             if self.data.multiplier > 1:
-                str_inst = StringifyMultilplierRolls(self.d20s, self.rlls2drp)
+                str_inst = StringifyMultilplierRolls(self.data)
                 posted_text += str_inst.configure_output(self.results, self.data)
             else:
-                str_inst = StringifySingleRoll(self.d20s, self.rlls2drp)
-                posted_text += str_inst.configure_output(self.results, self.data)
-
-            if self.data.advantages != 0:
-                # Need to remedy the results being called again here
-                posted_text += self.stringify_advantages(self.results)
-            if self.crit_code != 0:
-                posted_text += RollOutput.d20_critical_roll(self.crit_code)
+                str_inst = StringifySingleRoll(self.data)
+                posted_text += str_inst.configure_output(self.results)
 
             return posted_text
-
-    def stringify_advantages(self, results):
-        rejected = StringifyRejectedString().configure_output(results)
-        if self.data.advantages == 1:
-            return f"Rolled with Advantage\n" f"_Rejected Rolls_ : [ {rejected} ]\n"
-        if self.data.advantages == -1:
-            return f"Rolled with Disadvantage\n" f"_Rejected Rolls_ : [ {rejected} ]\n"
-
-    @staticmethod
-    def d20_critical_roll(crit_code):
-        if crit_code == 3:
-            return f"Wow! You got a Critical Success and a Critical Failure!\n"
-        elif crit_code == 2:
-            return f"**Critical Success**! Roll again!\n"
-        elif crit_code == 1:
-            return f"**Critical Failure**! Await your fate!\n"

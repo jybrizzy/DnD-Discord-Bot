@@ -11,6 +11,7 @@ class RollResults:
         self.rejected = kwargs.get("rejected", list().copy())
         self.pretotal = kwargs.get("pretotal", None)
         self.total = kwargs.get("total", None)
+        self.critical_value = kwargs.get("critical_value", False)
 
 
 class RollCalculator:
@@ -67,3 +68,23 @@ class RollCalculator:
         mods = self.set_modifier_total()
         self.results.total = self.results.pretotal + mods
         return self
+
+
+class RollResultIterator:
+    def __init__(self, roll_data):
+        self.multiplier = roll_data.multiplier
+        self.roll_calc = RollCalculator(roll_data)
+
+    def __iter__(self):
+        self.count = 0
+        return self
+
+    def __next__(self):
+        if self.multiplier > self.count:
+            self.count += 1
+            roll_result = (
+                self.roll_calc.set_dice_rolls().set_pretotal().set_total().results
+            )
+            return roll_result
+        else:
+            raise StopIteration

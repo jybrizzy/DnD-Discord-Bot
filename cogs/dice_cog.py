@@ -2,36 +2,8 @@ import asyncio
 import discord
 from discord.ext import commands
 from cogs.utils.roll_parser import Roll, RollParser
-from cogs.utils.roll_calculator import RollCalculator
+from cogs.utils.roll_calculator import RollResultIterator
 from cogs.utils.roll_output import RollOutput
-
-
-def roll_calculations(roll_calc, multipliers):
-    result_list = []
-    for _ in range(multipliers):
-        roll_result = roll_calc.set_dice_rolls().set_pretotal().set_total().results
-        result_list.append(roll_result)
-    return result_list
-
-
-class RollResultIter:
-    def __init__(self, multiplier, roll_calc):
-        self.multiplier = multiplier
-        self.roll_calc = roll_calc
-
-    def __iter__(self):
-        self.count = 0
-        return self
-
-    def __next__(self):
-        if self.multiplier > self.count:
-            self.count += 1
-            roll_result = (
-                self.roll_calc.set_dice_rolls().set_pretotal().set_total().results
-            )
-            return roll_result
-        else:
-            raise StopIteration
 
 
 class DiceCog(commands.Cog):
@@ -40,18 +12,16 @@ class DiceCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def roll_pipeline(self, ctx, roll_data, roll_string=None):
+        roll_results = iter(RollResultIterator(roll_data))
+        roll_output = RollOutput(roll_data, roll_results, roll_string)
+        await roll_output.main_roll_result(ctx)
+
     @commands.command(name="roll", aliases=("r", "d20", "1d20", "Roll", "ROLL"))
     async def roll_cmd(self, ctx, *, die_string=None):
 
         roll_data = RollParser(die_string)
-        rc = RollCalculator(roll_data)
-        roll_results = roll_calculations(rc, roll_data.multiplier)
-        roll_output = RollOutput(
-            roll_data,
-            roll_results,
-        )
-        roll_string = roll_output.main_roll_result(ctx)
-
+        roll_string = self.roll_pipeline(ctx, roll_data)
         msg = await ctx.send(roll_string)
 
         repeat = "🔁"  # self.bot.get_emoji(850479576198414366)
@@ -79,12 +49,7 @@ class DiceCog(commands.Cog):
                 await msg.clear_reactions()
             else:
                 await msg.remove_reaction(reaction, user)
-                reroll_results = roll_calculations(rc, roll_data.multiplier)
-                reroll_output = RollOutput(
-                    roll_data,
-                    reroll_results,
-                )
-                reroll_str = reroll_output.main_roll_result(ctx)
+                reroll_str = self.roll_pipeline(ctx, roll_data)
                 await ctx.send(reroll_str)
 
     @commands.command(
@@ -108,21 +73,16 @@ class DiceCog(commands.Cog):
         }
 
         roll_data = RollParser(**roll)
-        rc = RollCalculator(roll_data)
-        roll_results = roll_calculations(rc, roll_data.multiplier)
-        roll_results = RollOutput(
-            roll_data,
-            roll_results,
-            roll_string="Ability Score Rolls",
+        roll_string = self.roll_pipeline(
+            ctx, roll_data, roll_string="Ability Score Rolls"
         )
-        roll_string = roll_results.main_roll_result(ctx)
 
         await ctx.send(roll_string)
 
         try:
             await ctx.message.delete()
         except Exception as e:
-            print("didn't happen", e)
+            print("Didn't delete message.", e)
 
 
 def setup(bot):
