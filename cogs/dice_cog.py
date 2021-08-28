@@ -12,10 +12,10 @@ class DiceCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def roll_pipeline(self, ctx, roll_data, roll_string=None):
+    def roll_pipeline(self, ctx, roll_data, roll_string=None):
         roll_results = iter(RollResultIterator(roll_data))
         roll_output = RollOutput(roll_data, roll_results, roll_string)
-        await roll_output.main_roll_result(ctx)
+        return roll_output.main_roll_result(ctx)
 
     @commands.command(name="roll", aliases=("r", "d20", "1d20", "Roll", "ROLL"))
     async def roll_cmd(self, ctx, *, die_string=None):
