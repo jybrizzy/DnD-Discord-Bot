@@ -14,6 +14,13 @@ class Roll:
         self.sign = sign
         self.warning = set()
 
+    def __eq__(self, other):
+        return (
+            self.die == other.die
+            and self.sides == other.sides
+            and self.sign is self.sign
+        )
+
     def __str__(self) -> str:
         die_str = f"{self.die}d{self.sides}"
         if self.sign:

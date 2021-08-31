@@ -1,8 +1,8 @@
 import random
 import unittest
 from functools import wraps
-
-from cogs.utils.roll_parser import Roll, RollParser
+from cogs.utils.roll_parser import Roll, RollParser, balanced_parenthesis
+from cogs.utils.errors import DiceSyntaxError
 from unittest.mock import patch
 
 # component testing
@@ -63,7 +63,7 @@ def result_length_check(results_arg):
         def wrapper(*args, **kwargs):
             results_arg_set = results_arg or []
             if len(results_arg_set) == len(DIE_EXPRESSIONS):
-                print("List lengths checked")
+                # print("List lengths checked")
                 return test_func(*args, **kwargs)
             else:
                 raise ValueError("Mismatched results lengths")
@@ -76,11 +76,10 @@ def result_length_check(results_arg):
 class TestRollParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        random.seed(30)
+        # random.seed(30)
         cls.die_expressions = []
         for exp in DIE_EXPRESSIONS:
             cls.die_expressions.append(RollParser(exp))
-        print(cls.die_expressions[1].roll_string)
 
     @classmethod
     def tearDownClass(cls):
@@ -89,9 +88,7 @@ class TestRollParser(unittest.TestCase):
     def test_balanced_parenthesis(self):
         for (statement, expected_value) in PARENTHESIS_EXPRESSIONS:
             with self.subTest(paren_string=statement):
-                self.assertEqual(
-                    RollParser.balanced_parenthesis(statement), expected_value
-                )
+                self.assertEqual(balanced_parenthesis(statement), expected_value)
 
     MULTIPLIER_TEST_LIST = [
         (1, "1d20"),
@@ -125,10 +122,10 @@ class TestRollParser(unittest.TestCase):
         expected = next(self.MULTIPLIER_TEST_ITER)
         expected_multiplier, die_str = expected
         result_multiplier = roll_exp.parse_multiplier()
-        self.assertEqual(result_multiplier, expected_multiplier)
         self.assertIsInstance(result_multiplier, int)
-        self.assertEqual(roll_exp.roll_string, die_str)
+        self.assertEqual(result_multiplier, expected_multiplier)
         self.assertIsInstance(roll_exp.roll_string, str)
+        self.assertEqual(roll_exp.roll_string, die_str)
 
     # fmt: off
     MODIFIER_TEST_LIST = [
@@ -136,8 +133,8 @@ class TestRollParser(unittest.TestCase):
         ([0], "d20"),
         ([0], "&d20"),
         ([4], "2d20 + 4"),
-        ([repr(Roll(1,6,'+'))], "1d20"),
-        ([1, repr(Roll(1,6,'+'))], ["+ 1 ", "+ 1d4 "], "1d20"),
+        ([Roll(1,6,'+')], "1d20"),
+        ([1, Roll(1,6,'+')], "1d20"),
         ([0], "1d4"),
         ([0], "4d6"),
         ([0], "4d6"),
@@ -148,54 +145,51 @@ class TestRollParser(unittest.TestCase):
         ([0], "1d20 advantage"),
         ([0], "1d20 disadvantage"),
         ([0], "advantage 4d20"),
-        ([5, 1, 2], ["+ 5 ", "+ 1 ", "+ 2 "], "1d20 advantage"),
+        ([5, 1, 2], "1d20 advantage"),
         ([0], "4d6 dl 1"),
         ([0], "4d6 adv kh3"),
-        ([1], ["+ 1d4 "], "1d10 dis"),
-        ([2], ["+ 2 "], "14d20 disadvantage dl 6"),
-        ([3, 1, 2], ["+ 3 ", "+ 1d4 ", "+ 2 "], "2d12 advan dl 1"),
+        ([1], "1d10 dis"),
+        ([2], "14d20 disadvantage dl 6"),
+        ([3, Roll(1,4,'+'), 2], ["+ 3 ", "+ 1d4 ", "+ 2 "], "2d12 advan dl 1"),
     ]
-
     # fmt: on
+
     MODIFIER_TEST_ITER = iter(MODIFIER_TEST_LIST)
 
     @result_length_check(MODIFIER_TEST_LIST)
     @for_each_roll
     def test_parse_modifier(self, roll_exp) -> None:
-        expected = next(self.MODIFIER_TEST_ITER)
-        modifier_result, modifier_str_result, die_str = expected
-        with patch("random.randint", lambda: 1):
-            modifier_list, modifier_str_list = roll_exp.parse_modifier()
-
-        self.assertListEqual(modifier_list, modifier_result)
+        modifier_result, die_str = next(self.MODIFIER_TEST_ITER)
+        # with patch("random.randint", lambda: 1):
+        modifier_list = roll_exp.parse_modifier()
         self.assertIsInstance(modifier_list, list)
-        self.assertEqual(modifier_str_list, modifier_str_result)
+        self.assertListEqual(modifier_list, modifier_result)
         self.assertEqual(roll_exp.roll_string, die_str)
         self.assertIsInstance(roll_exp.roll_string, str)
 
     BASE_ROLL_TEST_LIST = [
-        (repr(Roll(1, 20)), "1d20"),
-        (repr(Roll(1, 20)), "d20"),
-        (repr(Roll(1, 20)), "&d20"),
-        (repr(Roll(2, 20)), "2d20"),
-        (repr(Roll(1, 20)), "1d20 "),
-        (repr(Roll(1, 20)), "1d20 "),
-        (repr(Roll(1, 4)), "1d4"),
-        (repr(Roll(4, 6)), "4d6"),
-        ([{"dice": 4, "sides": 6}], "4d6"),
-        ([{"dice": 1, "sides": 20}], "1d20"),
-        ([{"dice": 1, "sides": 6}], "1d6"),
-        ([{"dice": 10, "sides": 10}], "10d10"),
-        ([{"dice": 1, "sides": 20}], "6 * 1d20"),
-        ([{"dice": 1, "sides": 20}], "1d20 advantage"),
-        ([{"dice": 1, "sides": 20}], "1d20 disadvantage"),
-        ([{"dice": 4, "sides": 20}], "advantage 4d20"),
-        ([{"dice": 1, "sides": 20}], "1d20 advantage"),
-        ([{"dice": 4, "sides": 6}], "4d6 dl 1"),
-        ([{"dice": 4, "sides": 6}], "4d6 adv kh3"),
-        ([{"dice": 1, "sides": 10}], "1d10 dis"),
-        ([{"dice": 14, "sides": 20}], "14d20 disadvantage dl 6"),
-        ([{"dice": 2, "sides": 12}], "2d12 advan dl 1"),
+        (Roll(1, 20), "1d20"),
+        (Roll(1, 20), "d20"),
+        (Roll(1, 20), "&d20"),
+        (Roll(2, 20), "2d20"),
+        (Roll(1, 20), "1d20 "),
+        (Roll(1, 20), "1d20 "),
+        (Roll(1, 4), "1d4"),
+        (Roll(4, 6), "4d6"),
+        (Roll(4, 6), "4d6"),
+        (Roll(1, 20), "1d20"),
+        (Roll(1, 6), "1d6"),
+        (Roll(10, 10), "10d10"),
+        (Roll(1, 20), "6 * 1d20"),
+        (Roll(1, 20), "1d20 advantage"),
+        (Roll(1, 20), "1d20 disadvantage"),
+        (Roll(4, 20), "advantage 4d20"),
+        (Roll(1, 20), "1d20 advantage"),
+        (Roll(4, 6), "4d6 dl 1"),
+        (Roll(4, 6), "4d6 adv kh3"),
+        (Roll(1, 10), "1d10 dis"),
+        (Roll(14, 20), "14d20 disadvantage dl 6"),
+        (Roll(2, 12), "2d12 advan dl 1"),
     ]
     BASE_ROLL_TEST_ITER = iter(BASE_ROLL_TEST_LIST)
 
@@ -206,7 +200,7 @@ class TestRollParser(unittest.TestCase):
         expected_roll, _ = expected
         base_roll_list = roll_exp.parse_base_roll()
 
-        self.assertCountEqual(base_roll_list, expected_roll)
+        self.assertEqual(base_roll_list, expected_roll)
 
     ADVANTAGE_DISADVANTAGE_TEST_LIST = [
         (0, "1d20"),
@@ -239,10 +233,9 @@ class TestRollParser(unittest.TestCase):
     @for_each_roll
     def test_parse_advantage_disadvantage(self, roll_exp) -> None:
         expected = next(self.ADVANTAGE_DISADVANTAGE_TEST_ITER)
-        expected_advantage, expected_disadvantage, _ = expected
-        result_advantage, result_disadvantage = roll_exp.parse_advantage_disadvantage()
-        self.assertIs(result_advantage, expected_advantage)
-        self.assertIs(result_disadvantage, expected_disadvantage)
+        expected_advantages, _ = expected
+        result_advantages = roll_exp.parse_advantages()
+        self.assertEqual(result_advantages, expected_advantages)
 
     DROP_LOWEST_TEST_LIST = [
         (0, "1d20"),
@@ -274,8 +267,7 @@ class TestRollParser(unittest.TestCase):
     @result_length_check(DROP_LOWEST_TEST_LIST)
     @for_each_roll
     def test_parse_drop_lowest(self, roll_exp) -> None:
-        expected = next(self.DROP_LOWEST_TEST_ITER)
-        expected_parse_value, _ = expected
+        expected_parse_value, _ = next(self.DROP_LOWEST_TEST_ITER)
         result_parse_value = roll_exp.parse_drop_lowest()
         self.assertEqual(result_parse_value, expected_parse_value)
 
