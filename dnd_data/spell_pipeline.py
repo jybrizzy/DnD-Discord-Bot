@@ -3,15 +3,16 @@ import requests
 import os
 import pandas as pd
 from sqlalchemy import create_engine
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, LargeBinary
 from sqlalchemy.orm import sessionmaker, registry
 from sqlalchemy.orm import relationship
 
 if os.path.exists("dnd5e.db"):
     os.remove("dnd5e.db")
-engine = create_engine("sqlite:///dnd5e.db", echo=True, future=True)
+engine = create_engine("sqlite:///dnd5e.db", future=True)
 # "sqlite+pysqlite:///:memory:"
+# echo = True
 
 
 class SpellApi:
@@ -45,21 +46,32 @@ class SpellApi:
         return spells_df
 
     def api_spell_configuration(self, spells_list):
-        spell_df = pd.DataFrame(spells_list)
-        spell_df.drop(
+        spells_df = pd.DataFrame(spells_list)
+        spells_df.drop(
             ["document__title", "document__license_url"], axis=1, inplace=True
         )
+        spells_df.rename(
+            columns={"desc": "description", "dnd_class": "dnd_classes"},
+            inplace=True,
+            errors="raise",
+        )
+        # spells_df["higher_levels"] = spells_df["higher_levels"].fillna("")
 
-        return spell_df
+        return spells_df
 
 
 def spell_explode_classes(df):
     spell_cls_df = pd.DataFrame(
-        df["dnd_class"].str.split(",").tolist(), index=df["slug"]
+        df["dnd_classes"]
+        .str.split(",")
+        .apply(lambda clst: [ent.strip() for ent in clst])
+        .tolist(),
+        index=df["slug"],
     ).stack()
     spell_cls_df = spell_cls_df.to_frame().reset_index().copy()
     spell_cls_df.drop(["level_1"], axis=1, inplace=True)
-    spell_cls_df.columns = ["slug", "class"]
+    spell_cls_df.columns = ["slug", "dnd_class"]
+    spell_cls_df = spell_cls_df[~spell_cls_df["dnd_class"].isin(["Ritual Caster"])]
     spellcasting_ability = {
         "Bard": "Charisma",
         "Cleric": "Wisdom",
@@ -71,22 +83,22 @@ def spell_explode_classes(df):
         "Wizard": "Intellegence",
     }
 
-    spell_cls_df["cast_ability"] = spell_cls_df["class"].map(spellcasting_ability)
+    spell_cls_df["cast_ability"] = spell_cls_df["dnd_class"].map(spellcasting_ability)
 
     return spell_cls_df
 
 
-def spell_table(df):
-    df = df[["slug", "desc"]].copy()
-    subtable_df = df[df["desc"].str.contains("###")].copy()
-    subtable_df["desc_table"] = df["desc"].str.split("|").str[1:-1]
+# def spell_table(df):
+#     df = df[["slug", "desc"]].copy()
+#     subtable_df = df[df["desc"].str.contains("###")].copy()
+#     subtable_df["desc_table"] = df["desc"].str.split("|").str[1:-1]
 
-    return subtable_df
+#     return subtable_df
 
 
 spells_df = SpellApi().api_to_df()
 spell_n_classes = spell_explode_classes(spells_df)
-subtables = spell_table(spells_df)
+# subtables = spell_table(spells_df)
 print(len(spells_df))
 
 ##SQLAlchemy##
@@ -104,7 +116,7 @@ class Spell:
     description = Column(String)
     higher_level = Column(String)
     page = Column(String)
-    spell_range = Column(String)
+    range = Column(String)
     components = Column(String)
     material = Column(String)
     ritual = Column(String)  # bool?
@@ -117,8 +129,9 @@ class Spell:
     dnd_classes = Column(String)
     archetype = Column(String)
     circles = Column(String)
+    document__slug = Column(String)
 
-    dnd_class = relationship("SpellClasses", back_populates="spell_slug")
+    dnd_class = relationship("SpellClasses", back_populates="spell")
 
 
 @mapper_registry.mapped
@@ -127,10 +140,11 @@ class SpellClasses:
 
     id = Column(Integer, primary_key=True)
     spell_id = Column(ForeignKey("spells_of_api.id"), nullable=False)
+    slug = Column(String, nullable=False)
     dnd_class = Column(String, nullable=False)
     casting_ability = Column(String)
 
-    spell_slug = relationship("Spell", back_populates="dnd_class")
+    spell = relationship("Spell", back_populates="dnd_class")
 
 
 with engine.begin() as connection:
@@ -140,6 +154,41 @@ Session = sessionmaker(bind=engine, future=True)
 
 
 with Session.begin() as session:
-    # spells_list = df.to_dict('records')
     spells_list = spells_df.to_dict("records")
-    session.add_all([Spell(**spell_dict) for spell_dict in spells_list])
+    spell_classes = spell_n_classes.to_dict("records")
+    spell_insts = [Spell(**spell_dict) for spell_dict in spells_list]
+    #   = [SpellClasses(**spell_class) for spell_class in spell_classes]
+    session.add_all()
+
+session = Session()
+
+# single spell query
+result = session.execute(select(Spell).filter_by(name="Augury"))
+spell_rlt = result.scalars().one()
+
+print(spell_rlt.name)
+
+select(Spell)
+
+## Spells of a class and level
+"""
+spell_book_qry = 
+            SELECT *
+            FROM 
+                spells_5e 
+            WHERE 
+                classes LIKE "%{class_search}%"
+            AND
+                level LIKE "{spell_lvl}" 
+            ORDER BY 
+                name;
+
+"""
+##Spells of a class
+stmt = (
+    select(Spell.slug, Spell.name, Spell.level, SpellClasses.slug)
+    .join(Spell.dnd_class)
+    .where(SpellClasses.dnd_class == "Druid")
+)
+print(session.execute(stmt).all())
+##Spells of a class and school of magic
