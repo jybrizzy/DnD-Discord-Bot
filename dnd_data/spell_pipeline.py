@@ -2,6 +2,7 @@ from re import sub
 import requests
 import os
 import pandas as pd
+from collections import OrderedDict
 from sqlalchemy import create_engine
 from sqlalchemy import insert, select
 from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, LargeBinary
@@ -61,16 +62,22 @@ class SpellApi:
 
 
 def spell_explode_classes(df):
-    spell_cls_df = pd.DataFrame(
-        df["dnd_classes"]
-        .str.split(",")
-        .apply(lambda clst: [ent.strip() for ent in clst])
-        .tolist(),
-        index=df["slug"],
-    ).stack()
-    spell_cls_df = spell_cls_df.to_frame().reset_index().copy()
-    spell_cls_df.drop(["level_1"], axis=1, inplace=True)
-    spell_cls_df.columns = ["slug", "dnd_class"]
+    spell_cls_df = (
+        pd.DataFrame(
+            df["dnd_classes"]
+            .str.split(",")
+            .apply(lambda clst: [ent.strip() for ent in clst])
+            .tolist(),
+            index=df["slug"],
+        )
+        .stack()
+        .to_frame()
+    )
+
+    spell_cls_df.index = spell_cls_df.index.rename(None, level=0)
+    spell_cls_df["slug"] = spell_cls_df.index.get_level_values(0)
+    spell_cls_df.columns = ["dnd_class", "slug"]
+    spell_cls_df = spell_cls_df.reindex(columns=["slug", "dnd_class"], copy=True)
     spell_cls_df = spell_cls_df[~spell_cls_df["dnd_class"].isin(["Ritual Caster"])]
     spellcasting_ability = {
         "Bard": "Charisma",
@@ -97,7 +104,13 @@ def spell_explode_classes(df):
 
 
 spells_df = SpellApi().api_to_df()
-spell_n_classes = spell_explode_classes(spells_df)
+spll_cls = spell_explode_classes(spells_df)
+clss_dict = OrderedDict(
+    [
+        (spell, spll_cls.xs(spell).to_dict("record"))
+        for spell in spll_cls.index.levels[0]
+    ]
+)
 # subtables = spell_table(spells_df)
 print(len(spells_df))
 
@@ -153,12 +166,19 @@ with engine.begin() as connection:
 Session = sessionmaker(bind=engine, future=True)
 
 
+def map_classes_to_spells(spell_dict, class_dict):
+    for key, value in spell_dict.items():
+        class_per_spell = class_dict.get(key, [])
+        value.dnd_class = SpellClasses(**class_per_spell)
+
+
 with Session.begin() as session:
-    spells_list = spells_df.to_dict("records")
-    spell_classes = spell_n_classes.to_dict("records")
+    spell_slug = spells_df["slug"].unique().tolist()
+    spells_list = spells_df.to_dict(into=OrderedDict, orient="records")
     spell_insts = [Spell(**spell_dict) for spell_dict in spells_list]
-    #   = [SpellClasses(**spell_class) for spell_class in spell_classes]
-    session.add_all()
+    spell_dictionary = OrderedDict(zip(spell_slug, spell_insts))
+    map_classes_to_spells(spell_dictionary, clss_dict)
+    session.add(list(spell_dictionary.values))
 
 session = Session()
 
