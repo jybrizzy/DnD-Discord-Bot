@@ -1,4 +1,3 @@
-from re import sub
 import requests
 import os
 import pandas as pd
@@ -7,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import insert, select
 from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, LargeBinary
 from sqlalchemy.orm import sessionmaker, registry
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, aliased
 
 if os.path.exists("dnd5e.db"):
     os.remove("dnd5e.db")
@@ -107,7 +106,7 @@ spells_df = SpellApi().api_to_df()
 spll_cls = spell_explode_classes(spells_df)
 clss_dict = OrderedDict(
     [
-        (spell, spll_cls.xs(spell).to_dict("record"))
+        (spell, spll_cls.xs(spell).to_dict("records"))
         for spell in spll_cls.index.levels[0]
     ]
 )
@@ -155,7 +154,7 @@ class SpellClasses:
     spell_id = Column(ForeignKey("spells_of_api.id"), nullable=False)
     slug = Column(String, nullable=False)
     dnd_class = Column(String, nullable=False)
-    casting_ability = Column(String)
+    cast_ability = Column(String)
 
     spell = relationship("Spell", back_populates="dnd_class")
 
@@ -169,16 +168,18 @@ Session = sessionmaker(bind=engine, future=True)
 def map_classes_to_spells(spell_dict, class_dict):
     for key, value in spell_dict.items():
         class_per_spell = class_dict.get(key, [])
-        value.dnd_class = SpellClasses(**class_per_spell)
+        value.dnd_class = [
+            SpellClasses(**spell_class) for spell_class in class_per_spell
+        ]
 
 
 with Session.begin() as session:
     spell_slug = spells_df["slug"].unique().tolist()
     spells_list = spells_df.to_dict(into=OrderedDict, orient="records")
     spell_insts = [Spell(**spell_dict) for spell_dict in spells_list]
-    spell_dictionary = OrderedDict(zip(spell_slug, spell_insts))
+    spell_dictionary = OrderedDict(list(zip(spell_slug, spell_insts)))
     map_classes_to_spells(spell_dictionary, clss_dict)
-    session.add(list(spell_dictionary.values))
+    session.add_all(list(spell_dictionary.values()))
 
 session = Session()
 
@@ -205,10 +206,19 @@ spell_book_qry =
 
 """
 ##Spells of a class
+s1, cls = aliased(Spell), aliased(SpellClasses)
 stmt = (
-    select(Spell.slug, Spell.name, Spell.level, SpellClasses.slug)
-    .join(Spell.dnd_class)
-    .where(SpellClasses.dnd_class == "Druid")
+    select(
+        s1.slug,
+        s1.name,
+        s1.level,
+        s1.archetype,
+        s1.circles,
+        cls.dnd_class,
+        cls.cast_ability,
+    )
+    .join(s1.dnd_class)
+    .where(cls.dnd_class == "Druid")
 )
 print(session.execute(stmt).all())
 ##Spells of a class and school of magic
