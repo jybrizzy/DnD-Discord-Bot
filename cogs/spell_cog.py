@@ -65,18 +65,6 @@ class SpellBook:
 
 class SpellCog(commands.Cog):
 
-    DB_FILE = "C:\\Users\\jbrizzy\\Desktop\\DnD_DB\\dnd.db"
-
-    spellcasting_ability = {
-        "Bard": "Charisma",
-        "Cleric": "Wisdom",
-        "Druid": "Wisdom",
-        "Paladin": "Charisma",
-        "Ranger": "Wisdom",
-        "Sorcerer": "Charisma",
-        "Warlock": "Charisma",
-        "Wizard": "Intellegence",
-    }
     spell_classes = (
         "Bard",
         "Cleric",
