@@ -78,7 +78,9 @@ class SpellJsonPipeline(DnDPipeline):
 
     def df_to_dictionary(self):
         # df_to_dictionary needs to be called after "dnd_classes" column is referenced.
-        self.df.drop("dnd_classes", axis=1, inplace=True)
+        self.df["dnd_classes"] = [
+            ",".join(map(str, cls_lst)) for cls_lst in self.df["dnd_classes"]
+        ]
         spell_slug = self.df["slug"].unique().tolist()
         spells_list = self.df.to_dict(into=OrderedDict, orient="records")
         spell_insts = [Spell(**spell_dict) for spell_dict in spells_list]
